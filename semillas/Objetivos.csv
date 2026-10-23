@@ -1,0 +1,28 @@
+semana,inicio,fin,persona,objetivo,tareas
+1,2026-10-26,2026-10-31,albañil,"Demoler muro, cocina y baños e instalar la viga","01,02,03,04,05,06,07"
+1,2026-10-26,2026-10-31,hermano,Comprar lo de la demolición y la viga. Insistir a Triple A,08
+1,2026-10-26,2026-10-31,otros oficios,Viga de acero entregada a tiempo,
+2,2026-11-02,2026-11-07,albañil,"Instalaciones de agua, desagües, luz y gas con prueba de presión","09,10,11,12,13,14,15"
+2,2026-11-02,2026-11-07,hermano,Comprar tubería y cable. Seguir con Triple A,08
+2,2026-11-02,2026-11-07,otros oficios,Sin visitas programadas,
+3,2026-11-09,2026-11-14,albañil,"Pañetes, impermeabilización y afinados","16,17,18"
+3,2026-11-09,2026-11-14,hermano,Coordinar drywall y la visita de gas,08
+3,2026-11-09,2026-11-14,otros oficios,Cielo raso de drywall y revisión de gas,"19,20"
+4,2026-11-16,2026-11-21,albañil,Enchapar baños y salpicadero,"21,22,23"
+4,2026-11-16,2026-11-21,hermano,Verificar el H3 con agua de la red,"08,24"
+4,2026-11-16,2026-11-21,otros oficios,Triple A instala los contadores,
+5,2026-11-23,2026-11-28,albañil,"Mesón, aparatos sanitarios y grifería","25,26,27"
+5,2026-11-23,2026-11-28,hermano,Recibir mesón y aparatos. Coordinar al carpintero,
+5,2026-11-23,2026-11-28,otros oficios,Muebles de cocina y baño instalados,"28,29"
+6,2026-11-30,2026-12-05,albañil,"Eléctricos, estufa y pintura","32,33,34,35"
+6,2026-11-30,2026-12-05,hermano,Coordinar aluminio y vidrio,
+6,2026-11-30,2026-12-05,otros oficios,Ventana y divisiones de vidrio instaladas,"30,31"
+7,2026-12-07,2026-12-12,albañil,Retoques y limpieza gruesa,"36,37"
+7,2026-12-07,2026-12-12,hermano,Coordinar al pulidor y confirmar el agua,
+7,2026-12-07,2026-12-12,otros oficios,Desbaste del piso de granito,38
+8,2026-12-14,2026-12-19,albañil,Limpieza final,40
+8,2026-12-14,2026-12-19,hermano,Entrega y lista de pendientes,41
+8,2026-12-14,2026-12-19,otros oficios,Brillado del piso de granito,39
+9,2026-12-21,2026-12-23,albañil,Zócalos (solo si se cambian),"Z1,Z2,Z3"
+9,2026-12-21,2026-12-23,hermano,Comprar los zócalos (solo si se cambian),
+9,2026-12-21,2026-12-23,otros oficios,Sin visitas programadas,

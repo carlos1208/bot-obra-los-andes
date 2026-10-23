@@ -1,0 +1,320 @@
+{
+  "version": "borrador 2026-10-23",
+  "fotos": [
+    {
+      "codigo": "F01",
+      "nombre": "Muro cocina–sala desde la sala",
+      "encuadre": "Párate en la sala frente al muro. Que se vea completo, de piso a techo y de esquina a esquina.",
+      "tareas": [
+        "02",
+        "03"
+      ],
+      "hitos": [
+        "H1"
+      ]
+    },
+    {
+      "codigo": "F02",
+      "nombre": "Muro cocina–sala desde la cocina",
+      "encuadre": "Desde el fondo de la cocina mirando hacia la sala. Muro completo.",
+      "tareas": [
+        "02",
+        "03"
+      ],
+      "hitos": [
+        "H1"
+      ]
+    },
+    {
+      "codigo": "F03",
+      "nombre": "Cocina: mesón y muebles",
+      "encuadre": "De frente al mesón, a la altura del pecho. Que se vean el mesón y los muebles altos y bajos.",
+      "tareas": [
+        "04",
+        "25",
+        "28"
+      ],
+      "hitos": [
+        "H1",
+        "H4"
+      ]
+    },
+    {
+      "codigo": "F04",
+      "nombre": "Cocina: salpicadero",
+      "encuadre": "De frente a la pared que queda sobre el mesón.",
+      "tareas": [
+        "04",
+        "23"
+      ],
+      "hitos": [
+        "H1",
+        "H3"
+      ]
+    },
+    {
+      "codigo": "F05",
+      "nombre": "Cocina: techo",
+      "encuadre": "Desde la entrada de la cocina, con el celular apuntando al techo.",
+      "tareas": [
+        "19"
+      ],
+      "hitos": [
+        "H2"
+      ]
+    },
+    {
+      "codigo": "F06",
+      "nombre": "Cocina: estufa y gas",
+      "encuadre": "Cerca de la estufa. Que se vea la llave del gas.",
+      "tareas": [
+        "14",
+        "33"
+      ],
+      "hitos": [
+        "H2",
+        "H4"
+      ]
+    },
+    {
+      "codigo": "F07",
+      "nombre": "Cocina: tomas e interruptores",
+      "encuadre": "La pared de la cocina con más tomas e interruptores.",
+      "tareas": [
+        "12",
+        "32"
+      ],
+      "hitos": [
+        "H2",
+        "H4"
+      ]
+    },
+    {
+      "codigo": "F08",
+      "nombre": "Cocina: ventana",
+      "encuadre": "De frente a la ventana. Que se vea el marco completo.",
+      "tareas": [
+        "30"
+      ],
+      "hitos": [
+        "H4"
+      ]
+    },
+    {
+      "codigo": "F09",
+      "nombre": "Baño 1: vista general",
+      "encuadre": "Desde la puerta, con el celular horizontal.",
+      "tareas": [
+        "05",
+        "21"
+      ],
+      "hitos": [
+        "H1",
+        "H3"
+      ]
+    },
+    {
+      "codigo": "F10",
+      "nombre": "Baño 1: ducha",
+      "encuadre": "De frente a la ducha. Que se vean piso, paredes y grifería.",
+      "tareas": [
+        "05",
+        "10",
+        "17",
+        "21",
+        "27"
+      ],
+      "hitos": [
+        "H1",
+        "H2",
+        "H3",
+        "H4"
+      ]
+    },
+    {
+      "codigo": "F11",
+      "nombre": "Baño 1: lavamanos y sanitario",
+      "encuadre": "De frente al lavamanos, con el sanitario en la foto.",
+      "tareas": [
+        "05",
+        "10",
+        "26"
+      ],
+      "hitos": [
+        "H1",
+        "H2",
+        "H4"
+      ]
+    },
+    {
+      "codigo": "F12",
+      "nombre": "Baño 1: piso",
+      "encuadre": "Desde arriba. Que se vea todo el piso y el sifón.",
+      "tareas": [
+        "05",
+        "18",
+        "21"
+      ],
+      "hitos": [
+        "H1",
+        "H2",
+        "H3"
+      ]
+    },
+    {
+      "codigo": "F13",
+      "nombre": "Baño 2: vista general",
+      "encuadre": "Desde la puerta, con el celular horizontal.",
+      "tareas": [
+        "06",
+        "22"
+      ],
+      "hitos": [
+        "H1",
+        "H3"
+      ]
+    },
+    {
+      "codigo": "F14",
+      "nombre": "Baño 2: ducha",
+      "encuadre": "De frente a la ducha. Que se vean piso, paredes y grifería.",
+      "tareas": [
+        "06",
+        "11",
+        "17",
+        "22",
+        "27"
+      ],
+      "hitos": [
+        "H1",
+        "H2",
+        "H3",
+        "H4"
+      ]
+    },
+    {
+      "codigo": "F15",
+      "nombre": "Baño 2: lavamanos y sanitario",
+      "encuadre": "De frente al lavamanos, con el sanitario en la foto.",
+      "tareas": [
+        "06",
+        "11",
+        "26"
+      ],
+      "hitos": [
+        "H1",
+        "H2",
+        "H4"
+      ]
+    },
+    {
+      "codigo": "F16",
+      "nombre": "Baño 2: piso",
+      "encuadre": "Desde arriba. Que se vea todo el piso y el sifón.",
+      "tareas": [
+        "06",
+        "18",
+        "22"
+      ],
+      "hitos": [
+        "H1",
+        "H2",
+        "H3"
+      ]
+    },
+    {
+      "codigo": "F17",
+      "nombre": "Sala–comedor: vista general",
+      "encuadre": "Desde la esquina más lejana a la cocina, con el celular horizontal.",
+      "tareas": [
+        "34"
+      ],
+      "hitos": [
+        "H4"
+      ]
+    },
+    {
+      "codigo": "F18",
+      "nombre": "Piso de granito: sala–comedor",
+      "encuadre": "Celular a la altura de la cintura apuntando al piso. Que se vean manchas y rayones.",
+      "tareas": [
+        "38",
+        "39"
+      ],
+      "hitos": [
+        "H5"
+      ]
+    },
+    {
+      "codigo": "F19",
+      "nombre": "Piso de granito: pasillo y alcobas",
+      "encuadre": "Desde el inicio del pasillo, apuntando al piso.",
+      "tareas": [
+        "38",
+        "39"
+      ],
+      "hitos": [
+        "H5"
+      ]
+    },
+    {
+      "codigo": "F20",
+      "nombre": "Zócalos",
+      "encuadre": "Primer plano de un tramo de zócalo junto al piso.",
+      "tareas": [
+        "Z1",
+        "Z2",
+        "Z3"
+      ],
+      "hitos": []
+    },
+    {
+      "codigo": "F21",
+      "nombre": "Tablero eléctrico",
+      "encuadre": "De frente al tablero abierto.",
+      "tareas": [
+        "12",
+        "13",
+        "32"
+      ],
+      "hitos": [
+        "H2",
+        "H4"
+      ]
+    },
+    {
+      "codigo": "F22",
+      "nombre": "Punto de los contadores de agua",
+      "encuadre": "Donde estaban los contadores robados.",
+      "tareas": [
+        "08",
+        "24"
+      ],
+      "hitos": [
+        "H3"
+      ]
+    },
+    {
+      "codigo": "F23",
+      "nombre": "Zonas comunes: escalera y entrada",
+      "encuadre": "Escalera y entrada del edificio antes de subir materiales. Sirve si hay reclamos por daños.",
+      "tareas": [
+        "01"
+      ],
+      "hitos": [
+        "H1"
+      ]
+    },
+    {
+      "codigo": "F24",
+      "nombre": "Puerta del apartamento",
+      "encuadre": "Puerta y marco, por dentro y por fuera.",
+      "tareas": [
+        "01"
+      ],
+      "hitos": [
+        "H1"
+      ]
+    }
+  ]
+}

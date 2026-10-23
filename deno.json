@@ -1,0 +1,23 @@
+{
+  "tasks": {
+    "test": "deno test --allow-read --allow-env tests/",
+    "check": "deno check supabase/functions/telegram/index.ts scripts/*.ts tests/*.ts",
+    "ids": "deno run --allow-net --allow-read --allow-env scripts/ids_telegram.ts",
+    "oauth-drive": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run scripts/oauth_drive.ts",
+    "crear-hoja": "deno run --allow-net --allow-read --allow-env scripts/crear_hoja.ts",
+    "webhook": "deno run --allow-net --allow-read --allow-env scripts/set_webhook.ts",
+    "secreto": "deno run --allow-read --allow-write --allow-env scripts/secreto.ts",
+    "catalogo": "deno eval \"Deno.copyFileSync('semillas/fotos_antes.json', 'supabase/functions/_shared/fotos_antes.json')\""
+  },
+  "fmt": {
+    "lineWidth": 120
+  },
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-explicit-any",
+        "no-import-prefix"
+      ]
+    }
+  }
+}

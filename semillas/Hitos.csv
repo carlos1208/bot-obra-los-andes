@@ -1,0 +1,6 @@
+id,nombre,criterio,fecha_prevista,valor,descuento,valor_a_pagar,fecha_cumplido,pagado,fecha_pago,notas
+H1,Demolición y viga,"Muro cocina–sala demolido, viga de acero instalada, cocina y baños demolidos, escombros fuera",2026-10-31,900000,200000,,,no,,Se descuentan los 200.000 entregados a cuenta
+H2,Instalaciones ocultas,"Agua, desagües, red eléctrica y gas instalados y probados. Pañetes, impermeabilización y afinados listos",2026-11-14,900000,0,,,no,,
+H3,Enchapes y prueba con agua,Baños y salpicadero enchapados. Prueba con agua de la red sin fugas,2026-11-21,900000,0,,,no,,Requiere agua de Triple A
+H4,Aparatos y acabados,"Mesón, lavamanos, sanitarios, grifería y luces instalados y funcionando. Pintura lista",2026-12-05,900000,0,,,no,,
+H5,Entrega,"Retoques terminados, piso brillado, apartamento limpio y pendientes cerrados",2026-12-18,900000,0,,,no,,

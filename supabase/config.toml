@@ -1,0 +1,10 @@
+# Configuración mínima para desplegar con la CLI de Supabase.
+project_id = "bot-obra-los-andes"
+
+[functions.telegram]
+# Telegram no manda JWT: la función verifica X-Telegram-Bot-Api-Secret-Token.
+verify_jwt = false
+
+[edge_runtime]
+# Solo para pruebas locales: deja terminar las tareas en segundo plano.
+policy = "per_worker"

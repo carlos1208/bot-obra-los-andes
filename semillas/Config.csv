@@ -1,0 +1,15 @@
+parametro,valor,notas
+fecha_inicio,2026-10-26,Lunes de arranque
+fecha_fin,2026-12-18,Fin sin cambio de zócalos
+fecha_fin_con_zocalos,2026-12-23,Fin si se cambian los zócalos
+dias_laborales,"lun,mar,mié,jue,vie,sáb",
+festivos,"2026-11-02,2026-11-16,2026-12-08",Separados por coma
+presupuesto_disponible,12000000,Disponible hoy. Lo pagado antes va con cuenta_12M = no
+total_albanil,4500000,5 hitos de 900.000
+reserva_albanil,500000,Reserva para extras del albañil
+fondo_caja_menor,100000,Fondo fijo en manos del hermano
+tope_compra_caja_menor,100000,Por encima de este valor paga Carlos
+compra_sin_factura_max,50000,Valor sugerido. Confírmalo
+hora_aviso_lunes,07:00,Hora de Bogotá
+hora_aviso_diario,17:00,Hora de Bogotá
+hermano_ve_dinero,no,sí / no
