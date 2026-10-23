@@ -2,19 +2,19 @@
 // el bot solo ve lo que él mismo creó).
 
 import { env } from "./env.ts";
-import { tokenDrive } from "./google_auth.ts";
+import { driveToken } from "./google_auth.ts";
 
 const API = "https://www.googleapis.com/drive/v3";
 const UPLOAD = "https://www.googleapis.com/upload/drive/v3";
-export const MIME_CARPETA = "application/vnd.google-apps.folder";
+export const FOLDER_MIME = "application/vnd.google-apps.folder";
 
-export const CARPETAS = {
-  antesDespues: "Antes y después",
-  facturas: "Facturas",
-  notasVoz: "Notas de voz",
+export const FOLDERS = {
+  beforeAfter: "Antes y después",
+  invoices: "Facturas",
+  voiceNotes: "Notas de voz",
 } as const;
 
-export interface ArchivoDrive {
+export interface DriveFile {
   id: string;
   name: string;
   mimeType: string;
@@ -24,102 +24,102 @@ export interface ArchivoDrive {
   appProperties?: Record<string, string>;
 }
 
-const CAMPOS = "id,name,mimeType,parents,createdTime,webViewLink,appProperties";
+const FIELDS = "id,name,mimeType,parents,createdTime,webViewLink,appProperties";
 
 async function driveFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
   const r = await fetch(url, {
     ...init,
-    headers: { Authorization: `Bearer ${await tokenDrive()}`, ...init.headers },
+    headers: { Authorization: `Bearer ${await driveToken()}`, ...init.headers },
   });
-  const datos = await r.json();
-  if (!r.ok) throw new Error(`Drive ${r.status}: ${datos.error?.message ?? r.statusText}`);
-  return datos as T;
+  const data = await r.json();
+  if (!r.ok) throw new Error(`Drive ${r.status}: ${data.error?.message ?? r.statusText}`);
+  return data as T;
 }
 
 /** Escapa un texto para usarlo entre comillas simples en una consulta de Drive. */
-export function citar(texto: string): string {
-  return `'${texto.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+export function quote(text: string): string {
+  return `'${text.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
 }
 
-export async function listar(q: string): Promise<ArchivoDrive[]> {
-  const salida: ArchivoDrive[] = [];
+export async function listFiles(q: string): Promise<DriveFile[]> {
+  const files: DriveFile[] = [];
   let pageToken = "";
   do {
     const p = new URLSearchParams({
       q: `${q} and trashed = false`,
-      fields: `nextPageToken,files(${CAMPOS})`,
+      fields: `nextPageToken,files(${FIELDS})`,
       pageSize: "1000",
       orderBy: "createdTime",
     });
     if (pageToken) p.set("pageToken", pageToken);
-    const r = await driveFetch<{ files: ArchivoDrive[]; nextPageToken?: string }>(`${API}/files?${p}`);
-    salida.push(...r.files);
+    const r = await driveFetch<{ files: DriveFile[]; nextPageToken?: string }>(`${API}/files?${p}`);
+    files.push(...r.files);
     pageToken = r.nextPageToken ?? "";
   } while (pageToken);
-  return salida;
+  return files;
 }
 
-export async function crearCarpeta(
-  nombre: string,
-  padre: string,
+export async function createFolder(
+  name: string,
+  parent: string,
   appProperties?: Record<string, string>,
-): Promise<ArchivoDrive> {
-  return await driveFetch<ArchivoDrive>(`${API}/files?fields=${CAMPOS}`, {
+): Promise<DriveFile> {
+  return await driveFetch<DriveFile>(`${API}/files?fields=${FIELDS}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: nombre, mimeType: MIME_CARPETA, parents: [padre], appProperties }),
+    body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parent], appProperties }),
   });
 }
 
-export async function buscarOCrearCarpeta(
-  nombre: string,
-  padre: string,
+export async function findOrCreateFolder(
+  name: string,
+  parent: string,
   appProperties?: Record<string, string>,
-): Promise<ArchivoDrive> {
-  const existentes = await listar(
-    `name = ${citar(nombre)} and ${citar(padre)} in parents and mimeType = '${MIME_CARPETA}'`,
+): Promise<DriveFile> {
+  const existing = await listFiles(
+    `name = ${quote(name)} and ${quote(parent)} in parents and mimeType = '${FOLDER_MIME}'`,
   );
-  return existentes[0] ?? await crearCarpeta(nombre, padre, appProperties);
+  return existing[0] ?? await createFolder(name, parent, appProperties);
 }
 
 /** Carpeta de primer nivel dentro de «Obra Los Andes». */
-export async function carpeta(nombre: string): Promise<ArchivoDrive> {
-  return await buscarOCrearCarpeta(nombre, env("DRIVE_ROOT_FOLDER_ID"));
+export async function topFolder(name: string): Promise<DriveFile> {
+  return await findOrCreateFolder(name, env("DRIVE_ROOT_FOLDER_ID"));
 }
 
 /** Sube un archivo con carga multiparte (metadatos + contenido). */
-export async function subirArchivo(opciones: {
-  nombre: string;
-  padre: string;
+export async function uploadFile(options: {
+  name: string;
+  parent: string;
   mimeType: string;
   bytes: Uint8Array<ArrayBuffer>;
   appProperties?: Record<string, string>;
-}): Promise<ArchivoDrive> {
-  const limite = `obra-${crypto.randomUUID()}`;
-  const meta = JSON.stringify({
-    name: opciones.nombre,
-    parents: [opciones.padre],
-    appProperties: opciones.appProperties,
+}): Promise<DriveFile> {
+  const boundary = `obra-${crypto.randomUUID()}`;
+  const metadata = JSON.stringify({
+    name: options.name,
+    parents: [options.parent],
+    appProperties: options.appProperties,
   });
   const enc = new TextEncoder();
-  const cuerpo = new Blob([
-    enc.encode(`--${limite}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n`),
-    enc.encode(`--${limite}\r\nContent-Type: ${opciones.mimeType}\r\n\r\n`),
-    opciones.bytes,
-    enc.encode(`\r\n--${limite}--`),
+  const body = new Blob([
+    enc.encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`),
+    enc.encode(`--${boundary}\r\nContent-Type: ${options.mimeType}\r\n\r\n`),
+    options.bytes,
+    enc.encode(`\r\n--${boundary}--`),
   ]);
-  return await driveFetch<ArchivoDrive>(`${UPLOAD}/files?uploadType=multipart&fields=${CAMPOS}`, {
+  return await driveFetch<DriveFile>(`${UPLOAD}/files?uploadType=multipart&fields=${FIELDS}`, {
     method: "POST",
-    headers: { "Content-Type": `multipart/related; boundary=${limite}` },
-    body: cuerpo,
+    headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
   });
 }
 
-export async function actualizarPropiedades(
+export async function updateAppProperties(
   id: string,
   appProperties: Record<string, string>,
-): Promise<ArchivoDrive> {
-  return await driveFetch<ArchivoDrive>(`${API}/files/${id}?fields=${CAMPOS}`, {
+): Promise<DriveFile> {
+  return await driveFetch<DriveFile>(`${API}/files/${id}?fields=${FIELDS}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ appProperties }),
@@ -127,14 +127,17 @@ export async function actualizarPropiedades(
 }
 
 /** Recorta un valor para que clave + valor quepan en los 124 bytes que permite Drive. */
-export function valorPropiedad(clave: string, valor: string): string {
+export function fitPropertyValue(key: string, value: string): string {
   const enc = new TextEncoder();
-  const max = 124 - enc.encode(clave).length;
-  let v = valor;
+  const max = 124 - enc.encode(key).length;
+  let v = value;
   while (enc.encode(v).length > max) v = v.slice(0, -1);
   return v;
 }
 
-export function propiedades(p: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(Object.entries(p).filter(([, v]) => v !== "").map(([k, v]) => [k, valorPropiedad(k, v)]));
+/** appProperties listas para Drive: sin valores vacíos y recortadas a 124 bytes. */
+export function appProperties(p: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(p).filter(([, v]) => v !== "").map(([k, v]) => [k, fitPropertyValue(k, v)]),
+  );
 }

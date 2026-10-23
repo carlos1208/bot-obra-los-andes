@@ -1,27 +1,17 @@
 // Activa el webhook con secret_token y registra los comandos del bot.
 // Uso: deno task webhook
-import { cargarEnv, requerido } from "./_env.ts";
+import { loadEnv, required } from "./_env.ts";
+import { tg } from "../supabase/functions/_shared/telegram.ts";
 
-await cargarEnv();
-const token = requerido("TELEGRAM_BOT_TOKEN");
-const secreto = requerido("TELEGRAM_WEBHOOK_SECRET");
-const ref = requerido("PROJECT_REF");
+await loadEnv();
+required("TELEGRAM_BOT_TOKEN");
+const secret = required("TELEGRAM_WEBHOOK_SECRET");
+const projectRef = required("PROJECT_REF");
 
-async function tg(metodo: string, params: Record<string, unknown> = {}) {
-  const r = await fetch(`https://api.telegram.org/bot${token}/${metodo}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  const d = await r.json();
-  if (!d.ok) throw new Error(`${metodo}: ${d.description}`);
-  return d.result;
-}
-
-const url = `https://${ref}.supabase.co/functions/v1/telegram`;
+const url = `https://${projectRef}.supabase.co/functions/v1/telegram`;
 await tg("setWebhook", {
   url,
-  secret_token: secreto,
+  secret_token: secret,
   allowed_updates: ["message", "callback_query"],
   drop_pending_updates: true,
   max_connections: 10,
@@ -32,7 +22,7 @@ await tg("setMyCommands", {
     { command: "antes", description: "Subir fotos ANTES (Carlos)" },
   ],
 });
-const info = await tg("getWebhookInfo");
+const info = await tg<{ url: string; pending_update_count: number; last_error_message?: string }>("getWebhookInfo");
 console.log(`Webhook activo: ${info.url}`);
 console.log(`Pendientes: ${info.pending_update_count}`);
 if (info.last_error_message) console.log(`Último error: ${info.last_error_message}`);

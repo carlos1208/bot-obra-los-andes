@@ -2,26 +2,26 @@
 
 import { env } from "../_shared/env.ts";
 import type { Update } from "../_shared/telegram.ts";
-import { procesar } from "./procesar.ts";
+import { processUpdate } from "./process.ts";
 
-function igualesSeguro(a: string, b: string): boolean {
+function safeEqual(a: string, b: string): boolean {
   const x = new TextEncoder().encode(a);
   const y = new TextEncoder().encode(b);
-  let diferencia = x.length ^ y.length;
-  for (let i = 0; i < Math.max(x.length, y.length); i++) diferencia |= (x[i] ?? 0) ^ (y[i] ?? 0);
-  return diferencia === 0;
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
+  return diff === 0;
 }
 
-function enSegundoPlano(tarea: Promise<unknown>): void {
+function runInBackground(task: Promise<unknown>): void {
   const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
-  if (runtime) runtime.waitUntil(tarea);
-  else tarea.catch((e) => console.error(e));
+  if (runtime) runtime.waitUntil(task);
+  else task.catch((e) => console.error(e));
 }
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("ok");
-  const secreto = req.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
-  if (!igualesSeguro(secreto, env("TELEGRAM_WEBHOOK_SECRET"))) {
+  const secret = req.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
+  if (!safeEqual(secret, env("TELEGRAM_WEBHOOK_SECRET"))) {
     return new Response("no autorizado", { status: 401 });
   }
   let update: Update;
@@ -30,6 +30,6 @@ Deno.serve(async (req) => {
   } catch {
     return new Response("ok"); // cuerpo inválido: no tiene sentido que Telegram reintente
   }
-  enSegundoPlano(procesar(update));
+  runInBackground(processUpdate(update));
   return new Response("ok");
 });

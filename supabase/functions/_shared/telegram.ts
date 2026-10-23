@@ -2,9 +2,9 @@
 
 import { env } from "./env.ts";
 
-export const LIMITE_ARCHIVO = 20 * 1024 * 1024; // getFile: hasta 20 MB
+export const MAX_FILE_BYTES = 20 * 1024 * 1024; // getFile: hasta 20 MB
 
-export interface Usuario {
+export interface User {
   id: number;
   first_name: string;
   username?: string;
@@ -17,7 +17,7 @@ export interface Chat {
   is_forum?: boolean;
 }
 
-export interface TamanoFoto {
+export interface PhotoSize {
   file_id: string;
   file_unique_id: string;
   width: number;
@@ -25,7 +25,7 @@ export interface TamanoFoto {
   file_size?: number;
 }
 
-export interface Documento {
+export interface Document {
   file_id: string;
   file_unique_id: string;
   file_name?: string;
@@ -33,121 +33,121 @@ export interface Documento {
   file_size?: number;
 }
 
-export interface Mensaje {
+export interface Message {
   message_id: number;
   message_thread_id?: number;
   is_topic_message?: boolean;
-  from?: Usuario;
+  from?: User;
   chat: Chat;
   date: number;
   text?: string;
   caption?: string;
   media_group_id?: string;
-  photo?: TamanoFoto[];
-  document?: Documento;
-  voice?: Documento & { duration: number };
-  reply_to_message?: Mensaje & { forum_topic_created?: { name: string } };
+  photo?: PhotoSize[];
+  document?: Document;
+  voice?: Document & { duration: number };
+  reply_to_message?: Message & { forum_topic_created?: { name: string } };
   forum_topic_created?: { name: string };
 }
 
-export interface Callback {
+export interface CallbackQuery {
   id: string;
-  from: Usuario;
-  message?: Mensaje;
+  from: User;
+  message?: Message;
   data?: string;
 }
 
 export interface Update {
   update_id: number;
-  message?: Mensaje;
-  callback_query?: Callback;
+  message?: Message;
+  callback_query?: CallbackQuery;
 }
 
-export interface Boton {
+export interface Button {
   text: string;
   callback_data: string;
 }
 
-export type Teclado = Boton[][];
+export type Keyboard = Button[][];
 
-export async function tg<T = unknown>(metodo: string, params: Record<string, unknown> = {}): Promise<T> {
-  const r = await fetch(`https://api.telegram.org/bot${env("TELEGRAM_BOT_TOKEN")}/${metodo}`, {
+export async function tg<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+  const r = await fetch(`https://api.telegram.org/bot${env("TELEGRAM_BOT_TOKEN")}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
-  const datos = await r.json();
-  if (!datos.ok) throw new Error(`Telegram ${metodo}: ${datos.description ?? r.status}`);
-  return datos.result as T;
+  const data = await r.json();
+  if (!data.ok) throw new Error(`Telegram ${method}: ${data.description ?? r.status}`);
+  return data.result as T;
 }
 
-export interface Destino {
+export interface Target {
   chatId: number;
   threadId?: number;
 }
 
-export async function enviar(destino: Destino, texto: string, teclado?: Teclado): Promise<Mensaje> {
-  return await tg<Mensaje>("sendMessage", {
-    chat_id: destino.chatId,
-    message_thread_id: destino.threadId,
-    text: texto,
+export async function sendMessage(target: Target, text: string, keyboard?: Keyboard): Promise<Message> {
+  return await tg<Message>("sendMessage", {
+    chat_id: target.chatId,
+    message_thread_id: target.threadId,
+    text,
     parse_mode: "HTML",
     link_preview_options: { is_disabled: true },
-    reply_markup: teclado ? { inline_keyboard: teclado } : undefined,
+    reply_markup: keyboard ? { inline_keyboard: keyboard } : undefined,
   });
 }
 
-export async function editarTexto(chatId: number, messageId: number, texto: string, teclado?: Teclado) {
+export async function editMessageText(chatId: number, messageId: number, text: string, keyboard?: Keyboard) {
   return await tg("editMessageText", {
     chat_id: chatId,
     message_id: messageId,
-    text: texto,
+    text,
     parse_mode: "HTML",
     link_preview_options: { is_disabled: true },
-    reply_markup: teclado ? { inline_keyboard: teclado } : undefined,
+    reply_markup: keyboard ? { inline_keyboard: keyboard } : undefined,
   });
 }
 
-export async function editarTeclado(chatId: number, messageId: number, teclado?: Teclado) {
+export async function editKeyboard(chatId: number, messageId: number, keyboard?: Keyboard) {
   return await tg("editMessageReplyMarkup", {
     chat_id: chatId,
     message_id: messageId,
-    reply_markup: { inline_keyboard: teclado ?? [] },
+    reply_markup: { inline_keyboard: keyboard ?? [] },
   });
 }
 
-export async function responderCallback(id: string, texto?: string) {
-  return await tg("answerCallbackQuery", { callback_query_id: id, text: texto });
+export async function answerCallback(id: string, text?: string) {
+  return await tg("answerCallbackQuery", { callback_query_id: id, text });
 }
 
 /** Descarga un archivo de Telegram (máximo 20 MB). */
-export async function descargar(fileId: string): Promise<{ bytes: Uint8Array<ArrayBuffer>; ruta: string }> {
-  const archivo = await tg<{ file_path?: string; file_size?: number }>("getFile", { file_id: fileId });
-  if (!archivo.file_path) throw new Error("Telegram no entregó la ruta del archivo");
-  const r = await fetch(`https://api.telegram.org/file/bot${env("TELEGRAM_BOT_TOKEN")}/${archivo.file_path}`);
+export async function downloadFile(fileId: string): Promise<{ bytes: Uint8Array<ArrayBuffer>; path: string }> {
+  const file = await tg<{ file_path?: string; file_size?: number }>("getFile", { file_id: fileId });
+  if (!file.file_path) throw new Error("Telegram no entregó la ruta del archivo");
+  const r = await fetch(`https://api.telegram.org/file/bot${env("TELEGRAM_BOT_TOKEN")}/${file.file_path}`);
   if (!r.ok) throw new Error(`Descarga de Telegram ${r.status}`);
-  return { bytes: new Uint8Array(await r.arrayBuffer()), ruta: archivo.file_path };
+  return { bytes: new Uint8Array(await r.arrayBuffer()), path: file.file_path };
 }
 
 /** Imagen de un mensaje: la foto en su mayor tamaño o un archivo de imagen. */
-export interface ImagenRecibida {
+export interface ReceivedImage {
   fileId: string;
-  tamano?: number;
+  size?: number;
   mime: string;
   extension: string;
 }
 
-export function imagenDe(m: Mensaje): ImagenRecibida | null {
+export function imageOf(m: Message): ReceivedImage | null {
   if (m.photo?.length) {
-    const mayor = m.photo[m.photo.length - 1];
-    return { fileId: mayor.file_id, tamano: mayor.file_size, mime: "image/jpeg", extension: "jpg" };
+    const largest = m.photo[m.photo.length - 1];
+    return { fileId: largest.file_id, size: largest.file_size, mime: "image/jpeg", extension: "jpg" };
   }
   if (m.document?.mime_type?.startsWith("image/")) {
     const ext = m.document.file_name?.split(".").pop()?.toLowerCase() ||
       m.document.mime_type.split("/")[1] || "jpg";
     return {
       fileId: m.document.file_id,
-      tamano: m.document.file_size,
+      size: m.document.file_size,
       mime: m.document.mime_type,
       extension: ext === "jpeg" ? "jpg" : ext,
     };
@@ -156,7 +156,7 @@ export function imagenDe(m: Mensaje): ImagenRecibida | null {
 }
 
 /** Comando del texto («/estado@MiBot hola» -> "estado"). */
-export function comandoDe(texto?: string): string | null {
-  const m = texto?.trim().match(/^\/([a-záéíóúñ_]+)(?:@\w+)?(?:\s|$)/i);
+export function commandOf(text?: string): string | null {
+  const m = text?.trim().match(/^\/([a-záéíóúñ_]+)(?:@\w+)?(?:\s|$)/i);
   return m ? m[1].toLowerCase() : null;
 }

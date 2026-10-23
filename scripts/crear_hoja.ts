@@ -6,14 +6,14 @@
 //   deno task crear-hoja --reemplazar Tareas,Objetivos
 //   deno task crear-hoja --reemplazar todas       (borra Reportes, Gastos y Pagos: cuidado)
 import { parse } from "jsr:@std/csv@1.0.6";
-import { cargarEnv, requerido } from "./_env.ts";
-import { prepararCelda, sheetsFetch } from "../supabase/functions/_shared/sheets.ts";
+import { loadEnv, required } from "./_env.ts";
+import { sheetsFetch, toCell } from "../supabase/functions/_shared/sheets.ts";
 
-await cargarEnv();
-for (const n of ["SHEET_ID", "GOOGLE_SA_EMAIL", "GOOGLE_SA_PRIVATE_KEY"]) requerido(n);
+await loadEnv();
+for (const n of ["SHEET_ID", "GOOGLE_SA_EMAIL", "GOOGLE_SA_PRIVATE_KEY"]) required(n);
 
-const PESTANAS = ["Tareas", "Hitos", "Esperado", "Objetivos", "Reportes", "Gastos", "Pagos", "Presupuesto", "Config"];
-const MONEDA = new Set([
+const TABS = ["Tareas", "Hitos", "Esperado", "Objetivos", "Reportes", "Gastos", "Pagos", "Presupuesto", "Config"];
+const MONEY_COLUMNS = new Set([
   "valor",
   "descuento",
   "valor_a_pagar",
@@ -22,8 +22,16 @@ const MONEDA = new Set([
   "saldo",
   "saldo_caja_menor",
 ]);
-const FECHAS = new Set(["fecha", "inicio", "fin", "inicio_semana", "fecha_estimada", "fecha_cumplido", "fecha_pago"]);
-const CONFIG_MONEDA = new Set([
+const DATE_COLUMNS = new Set([
+  "fecha",
+  "inicio",
+  "fin",
+  "inicio_semana",
+  "fecha_estimada",
+  "fecha_cumplido",
+  "fecha_pago",
+]);
+const MONEY_CONFIG_KEYS = new Set([
   "presupuesto_disponible",
   "total_albanil",
   "reserva_albanil",
@@ -31,28 +39,31 @@ const CONFIG_MONEDA = new Set([
   "tope_compra_caja_menor",
   "compra_sin_factura_max",
 ]);
+const MONEY_FORMAT = { type: "CURRENCY", pattern: '"$"#,##0' };
+const DATE_FORMAT = { type: "DATE", pattern: "ddd d mmm" };
 
-const i = Deno.args.indexOf("--reemplazar");
-const pedidas = i >= 0 ? (Deno.args[i + 1] ?? "").split(",").map((s) => s.trim()) : [];
-const reemplazar = new Set(pedidas.includes("todas") ? PESTANAS : pedidas);
-for (const p of reemplazar) {
-  if (!PESTANAS.includes(p)) {
-    console.error(`No conozco la pestaña «${p}». Opciones: ${PESTANAS.join(", ")} o «todas».`);
+const flag = Deno.args.indexOf("--reemplazar");
+const requested = flag >= 0 ? (Deno.args[flag + 1] ?? "").split(",").map((s) => s.trim()) : [];
+const replace = new Set(requested.includes("todas") ? TABS : requested);
+for (const t of replace) {
+  if (!TABS.includes(t)) {
+    console.error(`No conozco la pestaña «${t}». Opciones: ${TABS.join(", ")} o «todas».`);
     Deno.exit(1);
   }
 }
 
-const letra = (c: number): string => (c < 26 ? "" : letra(Math.floor(c / 26) - 1)) + String.fromCharCode(65 + (c % 26));
+const columnLetter = (c: number): string =>
+  (c < 26 ? "" : columnLetter(Math.floor(c / 26) - 1)) + String.fromCharCode(65 + (c % 26));
 
-async function leerCsv(nombre: string): Promise<string[][]> {
-  return parse(await Deno.readTextFile(`semillas/${nombre}.csv`));
+async function readCsv(tab: string): Promise<string[][]> {
+  return parse(await Deno.readTextFile(`semillas/${tab}.csv`));
 }
 
-interface Hoja {
+interface SheetInfo {
   properties: { sheetId: number; title: string };
 }
 
-const info = await sheetsFetch<{ sheets: Hoja[]; properties: { title: string } }>(
+const info = await sheetsFetch<{ sheets: SheetInfo[]; properties: { title: string } }>(
   "?fields=properties.title,sheets.properties(sheetId,title)",
 );
 console.log(`Hoja: ${info.properties.title}`);
@@ -65,82 +76,82 @@ await sheetsFetch(":batchUpdate", {
   }),
 });
 
-const existentes = new Map(info.sheets.map((s) => [s.properties.title, s.properties.sheetId]));
-const faltan = PESTANAS.filter((p) => !existentes.has(p));
-if (faltan.length) {
-  const r = await sheetsFetch<{ replies: { addSheet: Hoja }[] }>(":batchUpdate", {
+const sheetIds = new Map(info.sheets.map((s) => [s.properties.title, s.properties.sheetId]));
+const missing = TABS.filter((t) => !sheetIds.has(t));
+if (missing.length) {
+  const r = await sheetsFetch<{ replies: { addSheet: SheetInfo }[] }>(":batchUpdate", {
     method: "POST",
-    body: JSON.stringify({ requests: faltan.map((title) => ({ addSheet: { properties: { title } } })) }),
+    body: JSON.stringify({ requests: missing.map((title) => ({ addSheet: { properties: { title } } })) }),
   });
-  for (const rep of r.replies) existentes.set(rep.addSheet.properties.title, rep.addSheet.properties.sheetId);
+  for (const rep of r.replies) sheetIds.set(rep.addSheet.properties.title, rep.addSheet.properties.sheetId);
 }
 
 // ¿Qué pestañas ya tienen datos?
 const q = new URLSearchParams();
-for (const p of PESTANAS) q.append("ranges", `'${p}'!A1:Z3`);
-const muestra = await sheetsFetch<{ valueRanges: { values?: unknown[][] }[] }>(`/values:batchGet?${q}`);
-const conDatos = new Set(PESTANAS.filter((_, k) => (muestra.valueRanges[k].values?.length ?? 0) > 1));
+for (const t of TABS) q.append("ranges", `'${t}'!A1:Z3`);
+const sample = await sheetsFetch<{ valueRanges: { values?: unknown[][] }[] }>(`/values:batchGet?${q}`);
+const withData = new Set(TABS.filter((_, k) => (sample.valueRanges[k].values?.length ?? 0) > 1));
 
 // Encabezados de Gastos y Pagos para las fórmulas de Presupuesto.
-const encabezados: Record<string, string[]> = {};
-for (const p of PESTANAS) encabezados[p] = (await leerCsv(p))[0];
-const col = (pestana: string, nombre: string) => {
-  const c = encabezados[pestana].indexOf(nombre);
-  if (c < 0) throw new Error(`${pestana} no tiene la columna ${nombre}`);
-  return letra(c);
+const headersByTab: Record<string, string[]> = {};
+for (const t of TABS) headersByTab[t] = (await readCsv(t))[0];
+const col = (tab: string, column: string) => {
+  const c = headersByTab[tab].indexOf(column);
+  if (c < 0) throw new Error(`${tab} no tiene la columna ${column}`);
+  return columnLetter(c);
 };
 
-function valoresDe(pestana: string, filas: string[][]): (string | number | boolean)[][] {
-  let cabecera = [...filas[0]];
-  let datos = filas.slice(1).map((f) => [...f]);
+function tabValues(tab: string, csv: string[][]): (string | number | boolean)[][] {
+  let headers = [...csv[0]];
+  let rows = csv.slice(1).map((r) => [...r]);
 
-  if (pestana === "Presupuesto") {
+  if (tab === "Presupuesto") {
     // Se agregan gastado y saldo después de presupuestado.
-    const pos = cabecera.indexOf("presupuestado") + 1;
-    cabecera.splice(pos, 0, "gastado", "saldo");
-    const cap = letra(cabecera.indexOf("capitulo"));
-    const asig = letra(cabecera.indexOf("presupuestado"));
-    const gast = letra(pos);
-    datos = datos.map((f, k) => {
-      const r = k + 2;
-      const sumas = [
+    const pos = headers.indexOf("presupuestado") + 1;
+    headers.splice(pos, 0, "gastado", "saldo");
+    const chapter = columnLetter(headers.indexOf("capitulo"));
+    const budget = columnLetter(headers.indexOf("presupuestado"));
+    const spent = columnLetter(pos);
+    rows = rows.map((r, k) => {
+      const n = k + 2;
+      const sums = [
         ["Gastos", "valor"],
         ["Pagos", "valor"],
-      ].flatMap(([p, v]) =>
-        ["sí", "si"].map((s) =>
-          `SUMIFS(${p}!${col(p, v)}:${col(p, v)},${p}!${col(p, "capitulo")}:${col(p, "capitulo")},$${cap}${r},` +
-          `${p}!${col(p, "cuenta_12M")}:${col(p, "cuenta_12M")},"${s}")`
+      ].flatMap(([t, v]) =>
+        ["sí", "si"].map((yes) =>
+          `SUMIFS(${t}!${col(t, v)}:${col(t, v)},${t}!${col(t, "capitulo")}:${col(t, "capitulo")},$${chapter}${n},` +
+          `${t}!${col(t, "cuenta_12M")}:${col(t, "cuenta_12M")},"${yes}")`
         )
       );
-      f.splice(pos, 0, `=${sumas.join("+")}`, `=IF(${asig}${r}="","",${asig}${r}-${gast}${r})`);
-      return f;
+      r.splice(pos, 0, `=${sums.join("+")}`, `=IF(${budget}${n}="","",${budget}${n}-${spent}${n})`);
+      return r;
     });
   }
-  if (pestana === "Hitos") {
-    const v = letra(cabecera.indexOf("valor"));
-    const d = letra(cabecera.indexOf("descuento"));
-    const c = cabecera.indexOf("valor_a_pagar");
-    datos.forEach((f, k) => (f[c] = `=IF(${v}${k + 2}="","",${v}${k + 2}-N(${d}${k + 2}))`));
+  if (tab === "Hitos") {
+    const value = columnLetter(headers.indexOf("valor"));
+    const discount = columnLetter(headers.indexOf("descuento"));
+    const c = headers.indexOf("valor_a_pagar");
+    rows.forEach((r, k) => (r[c] = `=IF(${value}${k + 2}="","",${value}${k + 2}-N(${discount}${k + 2}))`));
   }
-  cabecera = cabecera.map((h) => h.trim());
-  return [cabecera, ...datos.map((f) => f.map((v, c) => prepararCelda(cabecera[c], v)))];
+  headers = headers.map((h) => h.trim());
+  return [headers, ...rows.map((r) => r.map((v, c) => toCell(headers[c], v)))];
 }
 
-const escribir: { range: string; values: unknown[][] }[] = [];
-const limpiar: string[] = [];
-const formato: unknown[] = [];
+const writes: { range: string; values: unknown[][] }[] = [];
+const clears: string[] = [];
+const requests: unknown[] = [];
 
-for (const p of PESTANAS) {
-  if (conDatos.has(p) && !reemplazar.has(p)) {
-    console.log(`  = ${p}: ya tiene datos, no la toco`);
+for (const t of TABS) {
+  if (withData.has(t) && !replace.has(t)) {
+    console.log(`  = ${t}: ya tiene datos, no la toco`);
     continue;
   }
-  const valores = valoresDe(p, await leerCsv(p));
-  limpiar.push(`'${p}'`);
-  escribir.push({ range: `'${p}'!A1`, values: valores });
-  const sheetId = existentes.get(p)!;
-  const cabecera = valores[0] as string[];
-  formato.push(
+  const values = tabValues(t, await readCsv(t));
+  clears.push(`'${t}'`);
+  writes.push({ range: `'${t}'!A1`, values });
+  const sheetId = sheetIds.get(t)!;
+  const headers = values[0] as string[];
+  requests.push(
     {
       updateSheetProperties: {
         properties: { sheetId, gridProperties: { frozenRowCount: 1 } },
@@ -157,61 +168,57 @@ for (const p of PESTANAS) {
       },
     },
   );
-  cabecera.forEach((h, c) => {
-    const tipo = MONEDA.has(h)
-      ? { type: "CURRENCY", pattern: '"$"#,##0' }
-      : FECHAS.has(h)
-      ? { type: "DATE", pattern: "ddd d mmm" }
-      : null;
-    if (!tipo || p === "Config") return;
-    formato.push({
+  headers.forEach((h, c) => {
+    const format = MONEY_COLUMNS.has(h) ? MONEY_FORMAT : DATE_COLUMNS.has(h) ? DATE_FORMAT : null;
+    if (!format || t === "Config") return;
+    requests.push({
       repeatCell: {
         range: { sheetId, startRowIndex: 1, startColumnIndex: c, endColumnIndex: c + 1 },
-        cell: { userEnteredFormat: { numberFormat: tipo } },
+        cell: { userEnteredFormat: { numberFormat: format } },
         fields: "userEnteredFormat.numberFormat",
       },
     });
   });
-  if (p === "Config") {
-    const cv = cabecera.indexOf("valor");
-    valores.slice(1).forEach((f, k) => {
-      if (!CONFIG_MONEDA.has(String(f[0]))) return;
-      formato.push({
+  if (t === "Config") {
+    const vc = headers.indexOf("valor");
+    values.slice(1).forEach((r, k) => {
+      if (!MONEY_CONFIG_KEYS.has(String(r[0]))) return;
+      requests.push({
         repeatCell: {
-          range: { sheetId, startRowIndex: k + 1, endRowIndex: k + 2, startColumnIndex: cv, endColumnIndex: cv + 1 },
-          cell: { userEnteredFormat: { numberFormat: { type: "CURRENCY", pattern: '"$"#,##0' } } },
+          range: { sheetId, startRowIndex: k + 1, endRowIndex: k + 2, startColumnIndex: vc, endColumnIndex: vc + 1 },
+          cell: { userEnteredFormat: { numberFormat: MONEY_FORMAT } },
           fields: "userEnteredFormat.numberFormat",
         },
       });
     });
   }
-  formato.push({
-    autoResizeDimensions: { dimensions: { sheetId, dimension: "COLUMNS", startIndex: 0, endIndex: cabecera.length } },
+  requests.push({
+    autoResizeDimensions: { dimensions: { sheetId, dimension: "COLUMNS", startIndex: 0, endIndex: headers.length } },
   });
-  console.log(`  + ${p}: ${valores.length - 1} filas`);
+  console.log(`  + ${t}: ${values.length - 1} filas`);
 }
 
-if (limpiar.length) {
-  await sheetsFetch("/values:batchClear", { method: "POST", body: JSON.stringify({ ranges: limpiar }) });
+if (clears.length) {
+  await sheetsFetch("/values:batchClear", { method: "POST", body: JSON.stringify({ ranges: clears }) });
   await sheetsFetch("/values:batchUpdate", {
     method: "POST",
-    body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: escribir }),
+    body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: writes }),
   });
 }
 
 // La pestaña vacía que trae una hoja nueva («Sheet1» / «Hoja 1») sobra.
-const sobrantes = [...existentes].filter(([t]) => !PESTANAS.includes(t) && /^(sheet|hoja)\s?1$/i.test(t));
-for (const [titulo, sheetId] of sobrantes) {
-  formato.push({ deleteSheet: { sheetId } });
-  console.log(`  - ${titulo}: borrada`);
+const leftovers = [...sheetIds].filter(([title]) => !TABS.includes(title) && /^(sheet|hoja)\s?1$/i.test(title));
+for (const [title, sheetId] of leftovers) {
+  requests.push({ deleteSheet: { sheetId } });
+  console.log(`  - ${title}: borrada`);
 }
 
-formato.push({
+requests.push({
   updateSpreadsheetProperties: {
     properties: { locale: "es_CO", timeZone: "America/Bogota" },
     fields: "locale,timeZone",
   },
 });
-await sheetsFetch(":batchUpdate", { method: "POST", body: JSON.stringify({ requests: formato }) });
+await sheetsFetch(":batchUpdate", { method: "POST", body: JSON.stringify({ requests }) });
 
 console.log(`\nListo: https://docs.google.com/spreadsheets/d/${Deno.env.get("SHEET_ID")}/edit`);

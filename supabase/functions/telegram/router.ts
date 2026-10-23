@@ -1,51 +1,51 @@
-// Enrutador: botón tocado → sesión activa → comando → contenido.
+// Enrutador: botón tocado → comando → sesión activa → contenido.
 
-import { leerSesion } from "../_shared/db.ts";
-import { comandoDe, imagenDe, responderCallback } from "../_shared/telegram.ts";
-import * as antes from "./agentes/antes.ts";
-import { estado } from "./agentes/estado.ts";
-import type { Ctx } from "./contexto.ts";
+import { readSession } from "../_shared/db.ts";
+import { answerCallback, commandOf, imageOf } from "../_shared/telegram.ts";
+import * as beforePhotos from "./agents/before_photos.ts";
+import { status } from "./agents/status.ts";
+import type { Context } from "./context.ts";
 
-const AYUDA = [
+const HELP = [
   "Por ahora entiendo:",
   "/estado – semana de obra, tareas de hoy y disponible",
   "/antes – subir fotos ANTES (Carlos)",
 ].join("\n");
 
-export async function enrutar(ctx: Ctx): Promise<void> {
+export async function route(ctx: Context): Promise<void> {
   // 1. Botones
   if (ctx.callback) {
     const data = ctx.callback.data ?? "";
-    if (data.startsWith("ant:")) return await antes.alTocar(ctx);
-    await responderCallback(ctx.callback.id, "Ese botón ya no está activo.");
+    if (data.startsWith("ant:")) return await beforePhotos.onButton(ctx);
+    await answerCallback(ctx.callback.id, "Ese botón ya no está activo.");
     return;
   }
 
-  const mensaje = ctx.mensaje!;
-  const comando = comandoDe(mensaje.text ?? mensaje.caption);
+  const message = ctx.message!;
+  const command = commandOf(message.text ?? message.caption);
 
   // 2. Comandos (cortan cualquier flujo en curso)
-  if (comando === "estado") return await estado(ctx);
-  if (comando === "antes") return await antes.iniciar(ctx);
-  if (comando === "start" || comando === "ayuda") {
-    if (ctx.lugar === "privado") await ctx.responder(AYUDA);
+  if (command === "estado") return await status(ctx);
+  if (command === "antes") return await beforePhotos.start(ctx);
+  if (command === "start" || command === "ayuda") {
+    if (ctx.place === "private") await ctx.reply(HELP);
     return;
   }
 
   // 3. Sesión activa
-  const sesion = await leerSesion(ctx.chatId, ctx.userId);
-  if (sesion?.flujo === antes.FLUJO) return await antes.continuar(ctx, sesion);
+  const session = await readSession(ctx.chatId, ctx.userId);
+  if (session?.flujo === beforePhotos.FLOW) return await beforePhotos.resume(ctx, session);
 
   // 4. Contenido
-  const imagenes = ctx.mensajes.map(imagenDe).filter((i) => i !== null);
-  if (imagenes.length && (ctx.lugar === "fotos" || ctx.lugar === "privado")) {
-    if (ctx.rol === "carlos") return await antes.iniciar(ctx, imagenes);
-    if (ctx.lugar === "fotos") {
-      await ctx.responder("Las fotos DESPUÉS todavía no las recibo. Te aviso cuando estén listas.");
+  const images = ctx.messages.map(imageOf).filter((i) => i !== null);
+  if (images.length && (ctx.place === "photos" || ctx.place === "private")) {
+    if (ctx.role === "carlos") return await beforePhotos.start(ctx, images);
+    if (ctx.place === "photos") {
+      await ctx.reply("Las fotos DESPUÉS todavía no las recibo. Te aviso cuando estén listas.");
     }
     return;
   }
 
   // En el grupo, la conversación normal no es para el bot (por ahora).
-  if (ctx.lugar === "privado") await ctx.responder(AYUDA);
+  if (ctx.place === "private") await ctx.reply(HELP);
 }

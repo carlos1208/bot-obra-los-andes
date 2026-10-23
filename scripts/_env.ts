@@ -2,38 +2,38 @@
 // «deno task» corre desde la raíz del repo, así que la ruta es relativa a ella.
 import { load } from "jsr:@std/dotenv@0.225.8";
 
-export const RUTA_ENV = ".env.local";
+export const ENV_PATH = ".env.local";
 
-export async function cargarEnv(): Promise<void> {
+export async function loadEnv(): Promise<void> {
   try {
-    await Deno.stat(RUTA_ENV);
+    await Deno.stat(ENV_PATH);
   } catch {
     console.error("No encontré .env.local. Copia .env.example a .env.local primero.");
     Deno.exit(1);
   }
-  await load({ envPath: RUTA_ENV, export: true });
+  await load({ envPath: ENV_PATH, export: true });
 }
 
-export function requerido(nombre: string): string {
-  const v = Deno.env.get(nombre);
+export function required(name: string): string {
+  const v = Deno.env.get(name);
   if (!v) {
-    console.error(`Falta ${nombre} en .env.local`);
+    console.error(`Falta ${name} en .env.local`);
     Deno.exit(1);
   }
   return v;
 }
 
 /** Escribe o reemplaza CLAVE=valor en .env.local sin mostrar el valor. */
-export async function guardarEnEnv(clave: string, valor: string): Promise<void> {
-  let texto = "";
+export async function saveToEnv(key: string, value: string): Promise<void> {
+  let content = "";
   try {
-    texto = await Deno.readTextFile(RUTA_ENV);
+    content = await Deno.readTextFile(ENV_PATH);
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
-  const linea = `${clave}=${valor}`;
-  const re = new RegExp(`^${clave}=.*$`, "m");
-  texto = re.test(texto) ? texto.replace(re, () => linea) : `${texto.replace(/\n?$/, "\n")}${linea}\n`;
-  await Deno.writeTextFile(RUTA_ENV, texto);
-  Deno.env.set(clave, valor);
+  const line = `${key}=${value}`;
+  const re = new RegExp(`^${key}=.*$`, "m");
+  content = re.test(content) ? content.replace(re, () => line) : `${content.replace(/\n?$/, "\n")}${line}\n`;
+  await Deno.writeTextFile(ENV_PATH, content);
+  Deno.env.set(key, value);
 }
