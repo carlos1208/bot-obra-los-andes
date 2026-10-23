@@ -1,0 +1,16 @@
+# Secretos: nunca al repo
+.env
+.env.*
+!.env.example
+*.pem
+*service-account*.json
+client_secret*.json
+
+# Supabase local
+supabase/.branches
+supabase/.temp
+supabase/functions/.env
+
+# Varios
+.DS_Store
+node_modules/
