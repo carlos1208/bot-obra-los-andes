@@ -288,8 +288,14 @@ Deno.test("el hermano no sube ANTES y un error no le muestra detalles técnicos"
   const errorsBefore = (tables.errores ?? []).length;
   const saved = sheet.Config;
   sheet.Config = [["clave", "valor"]]; // Config rota: falta fecha_inicio
-  await processUpdate(message(BROTHER, { text: "/estado" }, GROUP, REPORTS_TOPIC));
-  sheet.Config = saved;
+  const consoleError = console.error;
+  console.error = () => {}; // el error es esperado: que no ensucie la salida de las pruebas
+  try {
+    await processUpdate(message(BROTHER, { text: "/estado" }, GROUP, REPORTS_TOPIC));
+  } finally {
+    console.error = consoleError;
+    sheet.Config = saved;
+  }
   const toBrother = sent.find((e) => e.params.chat_id === GROUP)!;
   assertEquals(toBrother.params.text, "No pude procesar eso. Ya le avisé a Carlos.");
   const toCarlos = sent.find((e) => e.params.chat_id === CARLOS)!;
