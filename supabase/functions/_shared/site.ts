@@ -18,6 +18,7 @@ export interface Config {
   fondo_caja_menor: number;
   tope_compra_caja_menor: number;
   compra_sin_factura_max: number;
+  compras_sin_factura_por_dia: number;
   hora_objetivos_lunes: string;
   hora_aviso_diario: string;
   hora_cierre_sabado: string;
@@ -95,6 +96,9 @@ export function readConfig(rows: Row[]): Config {
     fondo_caja_menor: cellNumber(values.get("fondo_caja_menor")),
     tope_compra_caja_menor: cellNumber(values.get("tope_compra_caja_menor")),
     compra_sin_factura_max: cellNumber(values.get("compra_sin_factura_max")),
+    compras_sin_factura_por_dia: values.has("compras_sin_factura_por_dia")
+      ? cellNumber(values.get("compras_sin_factura_por_dia"))
+      : 1,
     hora_objetivos_lunes: cellTime(values.get("hora_objetivos_lunes"), "07:00"),
     hora_aviso_diario: cellTime(values.get("hora_aviso_diario"), "17:00"),
     hora_cierre_sabado: cellTime(values.get("hora_cierre_sabado"), "17:00"),

@@ -4,7 +4,8 @@ total_albanil,4500000,
 reserva_albanil,500000,
 fondo_caja_menor,100000,
 tope_compra_caja_menor,100000,
-compra_sin_factura_max,20000,
+compra_sin_factura_max,10000,Valor máximo de una compra sin factura
+compras_sin_factura_por_dia,1,Máximo de compras sin factura en un mismo día
 fecha_inicio,2026-10-26,
 entrega_sin_zocalos,2026-12-18,
 entrega_con_zocalos,2026-12-23,

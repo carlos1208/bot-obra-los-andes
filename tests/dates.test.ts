@@ -33,7 +33,8 @@ Deno.test("Config de las semillas", () => {
   assertEquals(cfg.hermano_ve_dinero, false);
   assertEquals(cfg.hora_objetivos_lunes, "07:00");
   assertEquals(cfg.hora_aviso_diario, "17:00");
-  assertEquals(cfg.compra_sin_factura_max, 20_000);
+  assertEquals(cfg.compra_sin_factura_max, 10_000);
+  assertEquals(cfg.compras_sin_factura_por_dia, 1);
 });
 
 Deno.test("días laborales como rango o lista", () => {
