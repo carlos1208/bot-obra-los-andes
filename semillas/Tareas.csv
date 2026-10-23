@@ -1,45 +1,47 @@
-id,descripcion,oficio,inicio,fin,hito,materiales,estado,tentativo,notas
-01,"Proteger pisos, muebles y zonas comunes",albañil,2026-10-26,2026-10-26,H1,"Plástico, cartón, cinta de enmascarar",pendiente,no,
-02,Demoler muro cocina–sala,albañil,2026-10-26,2026-10-28,H1,Lonas para escombros,pendiente,no,
-03,Instalar viga de acero en el vano cocina–sala,albañil,2026-10-28,2026-10-30,H1,"Viga de acero, anclajes, grout",pendiente,no,
-04,"Desmontar mesón, muebles y enchape de cocina",albañil,2026-10-27,2026-10-28,H1,,pendiente,no,
-05,Demoler enchapes y retirar aparatos del baño 1,albañil,2026-10-29,2026-10-30,H1,,pendiente,no,
-06,Demoler enchapes y retirar aparatos del baño 2,albañil,2026-10-30,2026-10-31,H1,,pendiente,no,
-07,Retirar escombros,albañil,2026-10-31,2026-10-31,H1,Transporte de escombros,pendiente,no,
-08,Seguimiento a Triple A por los contadores de agua,hermano,2026-10-26,2026-11-20,H3,,pendiente,no,6 tickets abiertos. Sin agua no se verifica el H3 ni se pule el piso
-09,Regatas e instalación hidráulica de la cocina,albañil,2026-11-03,2026-11-04,H2,"Tubo PVC presión 1/2"", accesorios, soldadura PVC",pendiente,no,
-10,Regatas e instalación hidrosanitaria del baño 1,albañil,2026-11-03,2026-11-05,H2,"Tubo PVC sanitario 2"" y 4"", accesorios",pendiente,no,
-11,Regatas e instalación hidrosanitaria del baño 2,albañil,2026-11-05,2026-11-06,H2,"Tubo PVC sanitario 2"" y 4"", accesorios",pendiente,no,
-12,Red eléctrica de la cocina,albañil,2026-11-04,2026-11-06,H2,"Cable 10 y 12 AWG, tubo conduit, cajas",pendiente,no,
-13,Red eléctrica de los baños,albañil,2026-11-06,2026-11-07,H2,"Cable, tubo conduit, cajas",pendiente,no,
-14,Red de gas de la cocina,albañil,2026-11-05,2026-11-06,H2,"Tubería de gas, accesorios, válvula",pendiente,no,
-15,Prueba de presión de tuberías,albañil,2026-11-07,2026-11-07,H2,,pendiente,no,
-16,"Pañetar y resanar muro, viga y regatas",albañil,2026-11-09,2026-11-11,H2,"Cemento, arena, malla",pendiente,no,
-17,Impermeabilizar las duchas de los dos baños,albañil,2026-11-10,2026-11-11,H2,Impermeabilizante cementicio,pendiente,no,
-18,Afinar pisos de los baños con pendiente,albañil,2026-11-12,2026-11-13,H2,"Cemento, arena",pendiente,no,
-19,Cielo raso en drywall de la cocina,drywall,2026-11-11,2026-11-13,H2,,pendiente,no,El contratista trae el material
-20,Revisión de la red de gas,Gases del Caribe,2026-11-14,2026-11-14,H2,,pendiente,no,
-21,Enchapar piso y paredes del baño 1,albañil,2026-11-17,2026-11-19,H3,"Cerámica, pegante, boquilla, perfiles",pendiente,no,
-22,Enchapar piso y paredes del baño 2,albañil,2026-11-19,2026-11-21,H3,"Cerámica, pegante, boquilla, perfiles",pendiente,no,
-23,Enchapar salpicadero de la cocina,albañil,2026-11-20,2026-11-21,H3,"Cerámica de salpicadero, pegante, boquilla",pendiente,no,
-24,Verificar la hidráulica con agua de la red,hermano,2026-11-21,2026-11-21,H3,,pendiente,no,Requiere contadores de Triple A
-25,Instalar mesón en piedra de la cocina,albañil,2026-11-23,2026-11-24,H4,Silicona,pendiente,no,
-26,Instalar lavamanos y sanitarios,albañil,2026-11-24,2026-11-25,H4,"Sifones, acoples, silicona",pendiente,no,
-27,Instalar grifería y duchas,albañil,2026-11-25,2026-11-26,H4,Cinta teflón,pendiente,no,
-28,Instalar muebles de cocina,carpintero,2026-11-26,2026-11-28,H4,,pendiente,no,
-29,Instalar muebles de baño,carpintero,2026-11-27,2026-11-28,H4,,pendiente,no,
-30,Instalar ventana de la cocina,aluminio y vidrio,2026-11-30,2026-11-30,H4,,pendiente,no,
-31,Instalar divisiones de baño en vidrio,aluminio y vidrio,2026-12-01,2026-12-02,H4,,pendiente,no,
-32,"Instalar tomas, interruptores y luminarias",albañil,2026-11-30,2026-12-01,H4,"Tomas, interruptores, luminarias",pendiente,no,
-33,Conectar estufa y campana,albañil,2026-12-02,2026-12-02,H4,"Acoples de gas, ducto de campana",pendiente,no,
-34,Estucar y pintar cocina y sala,albañil,2026-12-01,2026-12-04,H4,"Estuco, pintura, lijas, rodillos",pendiente,no,
-35,Pintar los baños,albañil,2026-12-03,2026-12-05,H4,Pintura antihongos,pendiente,no,
-36,Retoques de pintura y resanes finales,albañil,2026-12-07,2026-12-09,H5,"Pintura, masilla",pendiente,no,
-37,Limpieza gruesa antes del pulido,albañil,2026-12-09,2026-12-10,H5,,pendiente,no,
-38,Desbastar el piso de granito,pulidor,2026-12-10,2026-12-12,H5,,pendiente,no,Requiere agua de la red
-39,Brillar el piso de granito,pulidor,2026-12-14,2026-12-16,H5,,pendiente,no,Requiere agua de la red
-40,Limpieza final,albañil,2026-12-17,2026-12-17,H5,,pendiente,no,
-41,Entrega y lista de pendientes,hermano,2026-12-18,2026-12-18,H5,,pendiente,no,
-Z1,Retirar zócalos actuales,albañil,2026-12-19,2026-12-19,,,pendiente,sí,Solo si se cambian los zócalos
-Z2,Instalar zócalos nuevos,albañil,2026-12-21,2026-12-22,,Zócalos y pegante,pendiente,sí,Solo si se cambian los zócalos
-Z3,Resanar y sellar zócalos,albañil,2026-12-22,2026-12-23,,Boquilla,pendiente,sí,Solo si se cambian los zócalos
+id,fase,tarea,responsable,dias,depende_de,inicio,fin,hito,tentativo,estado
+00,Preparación,Triple A: contador nuevo dentro de la reja; agua lista antes del 10 nov,Hermano + Triple A,13,,2026-10-26,2026-11-10,,no,pendiente
+01,Preparación,Aviso a la administración; compras de la semana 1,Hermano,1,,2026-10-26,2026-10-26,,no,pendiente
+02,Cocina,Demoler parte alta del muro cocina-sala,Albañil,2,,2026-10-26,2026-10-27,,no,pendiente
+03,Cocina,"Pintar viga de acero con anticorrosivo, instalarla y retirar puntales",Albañil,1,02,2026-10-28,2026-10-28,,no,pendiente
+04,Cocina,Reubicar puntos eléctricos del muro demolido,Albañil,1,03,2026-10-29,2026-10-29,,no,pendiente
+05,Cocina,Retirar rejilla de concreto y resanar vano de la ventana,Albañil,1,04,2026-10-30,2026-10-30,,no,pendiente
+06,Cocina,Subir muretes del área de labores hasta el techo,Albañil,1,05,2026-10-31,2026-10-31,H1,no,pendiente
+07,Cocina,Fabricación de la ventana de aluminio,Espera / fabricación,6,05,2026-10-31,2026-11-07,,no,pendiente
+08,Cocina,"Redes de agua, desagües, gas y eléctricas de cocina y labores",Albañil,2,06,2026-11-03,2026-11-04,,no,pendiente
+09,Cocina,"Muro bajo de la barra (1,2 m) y pañetes del lado de la sala",Albañil,2,08,2026-11-05,2026-11-06,,no,pendiente
+10,Cocina,Enchapar muretes nuevos,Albañil,1,09,2026-11-07,2026-11-07,H2,no,pendiente
+11,Carpintería,"Medidas el mismo día: vinera, almacenamiento de barra, muebles de baño y piedra",Carpintero,1,09,2026-11-07,2026-11-07,,no,pendiente
+12,Carpintería,Diseño y aprobación de la carpintería,Espera / fabricación,2,11,2026-11-09,2026-11-10,,no,pendiente
+13,Carpintería,"Fabricación de vinera, almacenamiento y muebles de baño",Espera / fabricación,10,12,2026-11-11,2026-11-23,,no,pendiente
+14,Cocina,Compra de piedra de cuarzo cortada a medida y tira 2x2 para la pestaña,Espera / fabricación,6,11,2026-11-09,2026-11-14,,no,pendiente
+15,Sala,Desmontar machimbre de la sala,Drywall,1,04,2026-10-30,2026-10-30,,no,pendiente
+16,Sala,Cielo raso en drywall de la sala-comedor,Drywall,4,15,2026-10-31,2026-11-05,,no,pendiente
+17,Cocina,Cielo raso en drywall de cocina y área de labores,Drywall,3,"10,16",2026-11-09,2026-11-11,,no,pendiente
+18,Cocina,Instalar ventana de aluminio,Aluminio y vidrio,1,"07,10",2026-11-09,2026-11-09,,no,pendiente
+19,Cocina,"Instalar mueble de cocina ya fabricado (pagar saldo 1,2 M)",Carpintero,1,"17,08",2026-11-12,2026-11-12,,no,pendiente
+20,Cocina,Conectar estufa a gas natural,Albañil,1,"19,24",2026-11-14,2026-11-14,,no,pendiente
+21,Cocina,Visita de certificación de Gases del Caribe,Gases del Caribe,1,20,2026-11-17,2026-11-17,,no,pendiente
+22,Baño social,"Demoler baño social (enchape, piso, aparatos)",Albañil,2,10,2026-11-09,2026-11-10,,no,pendiente
+23,Baño social,Redes hidrosanitarias del baño social,Albañil,2,"22,10",2026-11-11,2026-11-12,,no,pendiente
+24,Baño social,Impermeabilizar ducha del baño social,Albañil,1,23,2026-11-13,2026-11-13,,no,pendiente
+25,Baño social,Prueba de agua de la ducha (48 h),Espera / fabricación,2,"24,00",2026-11-14,2026-11-15,,no,pendiente
+26,Baño social,Pañetes y enchape de piso y muros del baño social,Albañil,4,"25,20",2026-11-17,2026-11-20,,no,pendiente
+27,Baño social,"Sanitario, ducha y grifería del baño social",Albañil,1,26,2026-11-21,2026-11-21,H3,no,pendiente
+28,Baño social,Cielo raso en drywall del baño social,Drywall,1,"26,17",2026-11-21,2026-11-21,,no,pendiente
+29,Baño social,Instalar división de ducha en vidrio templado,Aluminio y vidrio,1,"26,18",2026-11-21,2026-11-21,,no,pendiente
+30,Baño principal,Demoler baño principal,Albañil,2,27,2026-11-23,2026-11-24,,no,pendiente
+31,Baño principal,Redes hidrosanitarias del baño principal,Albañil,2,"30,27",2026-11-25,2026-11-26,,no,pendiente
+32,Baño principal,Impermeabilizar ducha del baño principal,Albañil,1,31,2026-11-27,2026-11-27,,no,pendiente
+33,Baño principal,Prueba de agua de la ducha (48 h),Espera / fabricación,2,32,2026-11-28,2026-11-29,,no,pendiente
+Z1,Acabados,"Retirar zócalos de granito: sala, pasillo y alcobas",Albañil,2,32,2026-11-28,2026-11-30,,sí,pendiente
+34,Baño principal,Pañetes y enchape de piso y muros del baño principal,Albañil,4,33,2026-12-01,2026-12-04,,no,pendiente
+35,Baño principal,"Sanitario, ducha y grifería del baño principal",Albañil,1,34,2026-12-05,2026-12-05,H4,no,pendiente
+36,Baño principal,Instalar división de ducha en vidrio templado,Aluminio y vidrio,1,34,2026-12-05,2026-12-05,,no,pendiente
+37,Carpintería,"Instalar vinera, almacenamiento de barra y muebles de baño",Carpintero,1,"13,34,26",2026-12-05,2026-12-05,,no,pendiente
+38,Acabados,Instalar los 2 lavamanos sobre sus muebles,Albañil,1,"37,35",2026-12-07,2026-12-07,,no,pendiente
+39,Cocina,"Instalar piedra de la barra, pestaña y sellante",Albañil,1,"14,37,38",2026-12-09,2026-12-09,,no,pendiente
+Z2,Acabados,Resanar la franja del zócalo retirado,Albañil,1,"Z1,39",2026-12-10,2026-12-10,,sí,pendiente
+40,Acabados,"Pintura: sala, cocina, baños y techo del baño principal",Albañil,4,"16,17,28,35,Z2",2026-12-11,2026-12-15,,no,pendiente
+42,Acabados,"Desbaste, pulido y brillado del piso de granito",Pulidor de pisos,3,"40,21,29,36,37,38,39",2026-12-16,2026-12-18,,no,pendiente
+Z3,Acabados,Instalar zócalos de PVC imitación madera,Albañil,2,42,2026-12-19,2026-12-21,,sí,pendiente
+41,Entrega,"Aseo final, lista de pendientes y entrega",Hermano,2,"21,29,36,38,39,40,42,Z3",2026-12-22,2026-12-23,H5,no,pendiente

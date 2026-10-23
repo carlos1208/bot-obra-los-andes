@@ -1,6 +1,12 @@
 import { assertEquals } from "jsr:@std/assert@1.0.19";
 import { fechaCorta, fechaDeCelda, hoyISO } from "../supabase/functions/_shared/formato.ts";
-import { esDiaDeObra, leerConfig, rangoSemana, semanaDeObra } from "../supabase/functions/_shared/obra.ts";
+import {
+  esDiaDeObra,
+  leerConfig,
+  leerDiasLaborales,
+  rangoSemana,
+  semanaDeObra,
+} from "../supabase/functions/_shared/obra.ts";
 import { filasDeSemilla } from "./_filas.ts";
 
 const cfg = leerConfig(await filasDeSemilla("Config"));
@@ -30,6 +36,9 @@ Deno.test("Config de las semillas", () => {
   assertEquals(cfg.dias_laborales, [1, 2, 3, 4, 5, 6]);
   assertEquals(cfg.hermano_ve_dinero, false);
   assertEquals(cfg.hora_aviso_diario, "17:00");
+  assertEquals(cfg.hora_objetivos_lunes, "07:00");
+  assertEquals(cfg.entrega_sin_zocalos, "2026-12-18");
+  assertEquals(cfg.compra_sin_factura_max, 20_000);
 });
 
 Deno.test("semana de obra, de lunes a sábado", () => {
@@ -53,4 +62,10 @@ Deno.test("días de obra: lunes a sábado sin festivos", () => {
   assertEquals(esDiaDeObra("2026-11-16", cfg), false); // festivo
   assertEquals(esDiaDeObra("2026-12-08", cfg), false); // festivo
   assertEquals(esDiaDeObra("2026-12-09", cfg), true);
+});
+
+Deno.test("días laborales como rango o lista", () => {
+  assertEquals(leerDiasLaborales("lun-sáb"), [1, 2, 3, 4, 5, 6]);
+  assertEquals(leerDiasLaborales("lun,mar,mié,jue,vie"), [1, 2, 3, 4, 5]);
+  assertEquals(leerDiasLaborales("lun-vie, sáb"), [1, 2, 3, 4, 5, 6]);
 });

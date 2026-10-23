@@ -66,17 +66,20 @@ Deno.test("antes de empezar la obra", async () => {
 
 Deno.test("día de obra: semana, tareas de hoy y dinero solo en el privado de Carlos", async () => {
   await cargarSemillas();
-  const privado = await correr("carlos", "privado", "2026-10-28");
+  const privado = await correr("carlos", "privado", "2026-10-27");
   assertStringIncludes(privado, "Semana 1 de obra (lun 26 oct – sáb 31 oct).");
-  assertStringIncludes(privado, "• 02 Demoler muro cocina–sala (albañil)");
-  assertStringIncludes(privado, "• 03 Instalar viga de acero");
+  assertStringIncludes(privado, "• 02 Demoler parte alta del muro cocina-sala (Albañil)");
+  assertStringIncludes(
+    privado,
+    "• 00 Triple A: contador nuevo dentro de la reja; agua lista antes del 10 nov (Hermano + Triple A)",
+  );
   assertStringIncludes(privado, "$12.000.000");
 
-  const grupo = await correr("carlos", "reportes", "2026-10-28");
-  assertStringIncludes(grupo, "• 02 Demoler muro cocina–sala");
+  const grupo = await correr("carlos", "reportes", "2026-10-27");
+  assertStringIncludes(grupo, "• 02 Demoler parte alta del muro");
   assert(!grupo.includes("12 M"), "en el grupo no se muestra dinero");
 
-  const hermanoPrivado = await correr("hermano", "privado", "2026-10-28");
+  const hermanoPrivado = await correr("hermano", "privado", "2026-10-27");
   assert(!hermanoPrivado.includes("12 M"), "el hermano no ve dinero");
 });
 
@@ -88,13 +91,23 @@ Deno.test("festivo y lectura en vivo: un cambio en la hoja se ve en la siguiente
   const tareas = hoja.Tareas;
   const col = tareas[0].indexOf("estado");
   tareas.find((f) => f[0] === "02")![col] = "terminada";
-  hoja.Gastos = [...hoja.Gastos, ["2026-10-27", "Ferretería", "", "", "Lonas", "45000", "", "caja menor", "sí"]];
-  const t = await correr("carlos", "privado", "2026-10-28");
+  hoja.Gastos = [...hoja.Gastos, [
+    "2026-10-27",
+    "Ferretería",
+    "",
+    "",
+    "Lonas",
+    "Materiales de obra y pintura",
+    "45000",
+    "caja menor",
+    "sí",
+  ]];
+  const t = await correr("carlos", "privado", "2026-10-27");
   assert(!t.includes("• 02 "), "la 02 terminada ya no sale");
   assertStringIncludes(t, "$11.955.000");
 
   // Si Carlos activa hermano_ve_dinero, el grupo ya lo muestra.
   hoja.Config = hoja.Config.map((f) => (f[0] === "hermano_ve_dinero" ? [f[0], "sí", f[2]] : f));
-  assertStringIncludes(await correr("hermano", "reportes", "2026-10-28"), "$11.955.000");
+  assertStringIncludes(await correr("hermano", "reportes", "2026-10-27"), "$11.955.000");
   assertEquals(lecturas.filter((r) => r === "Config").length >= 5, true);
 });

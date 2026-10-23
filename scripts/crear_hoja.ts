@@ -13,8 +13,16 @@ await cargarEnv();
 for (const n of ["SHEET_ID", "GOOGLE_SA_EMAIL", "GOOGLE_SA_PRIVATE_KEY"]) requerido(n);
 
 const PESTANAS = ["Tareas", "Hitos", "Esperado", "Objetivos", "Reportes", "Gastos", "Pagos", "Presupuesto", "Config"];
-const MONEDA = new Set(["valor", "descuento", "valor_a_pagar", "total", "asignado", "gastado", "saldo", "caja_menor"]);
-const FECHAS = new Set(["fecha", "inicio", "fin", "fecha_prevista", "fecha_cumplido", "fecha_pago"]);
+const MONEDA = new Set([
+  "valor",
+  "descuento",
+  "valor_a_pagar",
+  "presupuestado",
+  "gastado",
+  "saldo",
+  "saldo_caja_menor",
+]);
+const FECHAS = new Set(["fecha", "inicio", "fin", "inicio_semana", "fecha_estimada", "fecha_cumplido", "fecha_pago"]);
 const CONFIG_MONEDA = new Set([
   "presupuesto_disponible",
   "total_albanil",
@@ -87,16 +95,16 @@ function valoresDe(pestana: string, filas: string[][]): (string | number | boole
   let datos = filas.slice(1).map((f) => [...f]);
 
   if (pestana === "Presupuesto") {
-    // Se agregan gastado y saldo después de asignado.
-    const pos = cabecera.indexOf("asignado") + 1;
+    // Se agregan gastado y saldo después de presupuestado.
+    const pos = cabecera.indexOf("presupuestado") + 1;
     cabecera.splice(pos, 0, "gastado", "saldo");
     const cap = letra(cabecera.indexOf("capitulo"));
-    const asig = letra(cabecera.indexOf("asignado"));
+    const asig = letra(cabecera.indexOf("presupuestado"));
     const gast = letra(pos);
     datos = datos.map((f, k) => {
       const r = k + 2;
       const sumas = [
-        ["Gastos", "total"],
+        ["Gastos", "valor"],
         ["Pagos", "valor"],
       ].flatMap(([p, v]) =>
         ["sí", "si"].map((s) =>

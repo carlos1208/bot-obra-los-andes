@@ -1,17 +1,15 @@
-capitulo,asignado,notas
-Mano de obra albañil,4300000,"4.500.000 menos los 200.000 ya entregados, que van fuera de los 12 M"
-Extras albañil,500000,Reserva para extras
-Materiales obra gris,,Valor por definir
-Hidráulica y sanitaria,,Valor por definir
-Eléctrico,,Valor por definir
-Gas,,Valor por definir
-Enchapes,,Valor por definir
-Mesón y piedra,,Valor por definir
-Aparatos y grifería,,Valor por definir
-Drywall,,Valor por definir
-Carpintería,,Valor por definir
-Aluminio y vidrio,,Valor por definir
-Pintura,,Valor por definir
-Pulido de piso,,Valor por definir
-Zócalos,,Solo si se cambian
-Imprevistos,,Valor por definir
+capitulo,presupuestado,estado,nota
+Albañil (saldo de los 5 hitos),4300000,Aprobado,4.500.000 menos 200.000 ya entregados
+Reserva para extras del albañil,500000,Aprobada,Solo con aprobación escrita de Carlos
+Saldo del mueble de cocina,1200000,Aprobado,Se paga al instalarlo (12 nov)
+Pulido del piso,2800000,Estimado,≈ 74 m²; por cotizar
+Drywall,0,Por cotizar,
+Piedra de la barra,0,Por cotizar,
+Carpintería nueva,0,Por cotizar,"Vinera, almacenamiento de barra y 2 muebles de lavamanos"
+Batea,0,Por cotizar,
+Ventana y montaje de divisiones,0,Por cotizar,
+Materiales de obra y pintura,0,Por estimar,Se compra por semana
+Gases del Caribe,0,Por confirmar,
+Triple A y agua provisional,0,Por confirmar,
+Zócalos,1750000,Tentativo,Materiales ≈ 1.140.000 + mano de obra ≈ 600.000
+Pagado antes de los 12 M,0,Fuera de los 12 M,Solo para clasificar lo ya pagado

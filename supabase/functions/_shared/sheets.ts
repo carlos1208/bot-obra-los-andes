@@ -58,15 +58,14 @@ export async function leerPestanas<N extends string>(nombres: N[]): Promise<Reco
 // Columnas que siempre son texto aunque parezcan números («02», «08,24», «H1»).
 const COLUMNAS_TEXTO = new Set([
   "id",
-  "tarea",
-  "tareas",
+  "tarea_id",
+  "depende_de",
   "hito",
-  "hitos",
   "numero",
+  "numero_factura",
   "nit",
-  "se_hizo",
-  "terminadas",
-  "avanzaron",
+  "tareas_terminadas",
+  "tareas_avanzadas",
 ]);
 
 /** Prepara un valor para escribirlo con valueInputOption=USER_ENTERED. */

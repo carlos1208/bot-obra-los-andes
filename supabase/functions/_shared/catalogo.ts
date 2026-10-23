@@ -11,7 +11,7 @@ export interface FotoCatalogo {
   hitos: string[];
 }
 
-export const CATALOGO: FotoCatalogo[] = datos.fotos;
+export const CATALOGO: FotoCatalogo[] = datos;
 
 export function fotoDelCatalogo(codigo: string): FotoCatalogo | undefined {
   return CATALOGO.find((f) => f.codigo === codigo);
@@ -22,7 +22,7 @@ export function nombreFoto(tipo: "ANTES" | "DESPUÉS", fechaISO: string, n: numb
   return `${tipo} ${fechaISO} (${n}).${extension}`;
 }
 
-/** Carpeta de cada par: «F01 Muro cocina–sala desde la sala». */
+/** Carpeta de cada par: «F01 Muro cocina–sala completo». */
 export function nombreCarpetaPar(codigo: string, nombre: string): string {
   return `${codigo} ${nombre}`;
 }

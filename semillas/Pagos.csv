@@ -1,2 +1,4 @@
-fecha,a_quien,concepto,hito,valor,medio,capitulo,cuenta_12M,nota,registrado_en
-,Albañil,Anticipo a cuenta (se descuenta del H1),,200000,,Mano de obra albañil,no,Entregado antes de la obra. Fecha por confirmar,
+fecha,a_quien,concepto,hito,capitulo,valor,medio,soporte,cuenta_12M,registrado_por,nota
+,Albañil,Adelanto a cuenta de los 4.500.000 (inicio del trabajo),H1,Pagado antes de los 12 M,100000,,,no,Carlos,Fecha por confirmar
+2026-10-12,Albañil,Adelanto a cuenta de los 4.500.000 (semana del 12 oct),H1,Pagado antes de los 12 M,100000,,,no,Carlos,Fecha aproximada: semana del 12 oct
+,Carpintero,Adelanto del mueble de cocina (total 2.500.000),,Pagado antes de los 12 M,1300000,,,no,Carlos,Antes del 22 oct; fecha por confirmar

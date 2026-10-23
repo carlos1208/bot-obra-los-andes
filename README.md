@@ -165,13 +165,12 @@ Después de cambiar cualquier valor en `.env.local`: `npx supabase secrets set -
 
 ## Semillas
 
-`semillas/` trae una primera versión armada con lo que se sabe de la obra (fechas, hitos de 900.000, H1 con 200.000 de
-descuento, H3 el sáb 21 nov, caja menor de 100.000, festivos). Son **borrador** y hay que revisarlos contra los
-documentos reales:
+`semillas/` es copia de `Los Andes/07 App de reportes/semillas/` en el Drive de Carlos (cronograma v5 del 22 oct 2026).
+Si cambias una semilla allá, cópiala aquí y vuelve a cargarla con `deno task crear-hoja --reemplazar <Pestaña>`.
 
-- `Tareas.csv`: 41 tareas + Z1–Z3 armadas a partir del alcance. Reemplázalas con el cronograma v5.
-- `fotos_antes.json`: catálogo F01–F24 con encuadre, tareas e hitos. Sirve como guía para tomar las fotos.
-- `Presupuesto.csv`: solo el albañil tiene valor. Los demás capítulos están vacíos.
-- `Config.csv`: `compra_sin_factura_max = 50.000` es un valor sugerido.
-- `Pagos.csv`: el anticipo de 200.000 al albañil, sin fecha.
-- `facturas_esperadas.csv`: vacío hasta la fase 2.
+- `Tareas.csv`: las 46 tareas del cronograma v5 (00–42 y Z1–Z3 tentativas).
+- `fotos_antes.json`: catálogo F01–F24 con encuadre, tareas e hitos.
+- `Gastos.csv` y `Pagos.csv`: lo pagado antes de la obra, con `cuenta_12M = no`.
+- `facturas_esperadas.csv`: los valores de las 4 facturas reales para la fase 2.
+
+El mapa de la carpeta del Drive está en `CLAUDE.md`.

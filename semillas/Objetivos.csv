@@ -1,28 +1,26 @@
-semana,inicio,fin,persona,objetivo,tareas
-1,2026-10-26,2026-10-31,albañil,"Demoler muro, cocina y baños e instalar la viga","01,02,03,04,05,06,07"
-1,2026-10-26,2026-10-31,hermano,Comprar lo de la demolición y la viga. Insistir a Triple A,08
-1,2026-10-26,2026-10-31,otros oficios,Viga de acero entregada a tiempo,
-2,2026-11-02,2026-11-07,albañil,"Instalaciones de agua, desagües, luz y gas con prueba de presión","09,10,11,12,13,14,15"
-2,2026-11-02,2026-11-07,hermano,Comprar tubería y cable. Seguir con Triple A,08
-2,2026-11-02,2026-11-07,otros oficios,Sin visitas programadas,
-3,2026-11-09,2026-11-14,albañil,"Pañetes, impermeabilización y afinados","16,17,18"
-3,2026-11-09,2026-11-14,hermano,Coordinar drywall y la visita de gas,08
-3,2026-11-09,2026-11-14,otros oficios,Cielo raso de drywall y revisión de gas,"19,20"
-4,2026-11-16,2026-11-21,albañil,Enchapar baños y salpicadero,"21,22,23"
-4,2026-11-16,2026-11-21,hermano,Verificar el H3 con agua de la red,"08,24"
-4,2026-11-16,2026-11-21,otros oficios,Triple A instala los contadores,
-5,2026-11-23,2026-11-28,albañil,"Mesón, aparatos sanitarios y grifería","25,26,27"
-5,2026-11-23,2026-11-28,hermano,Recibir mesón y aparatos. Coordinar al carpintero,
-5,2026-11-23,2026-11-28,otros oficios,Muebles de cocina y baño instalados,"28,29"
-6,2026-11-30,2026-12-05,albañil,"Eléctricos, estufa y pintura","32,33,34,35"
-6,2026-11-30,2026-12-05,hermano,Coordinar aluminio y vidrio,
-6,2026-11-30,2026-12-05,otros oficios,Ventana y divisiones de vidrio instaladas,"30,31"
-7,2026-12-07,2026-12-12,albañil,Retoques y limpieza gruesa,"36,37"
-7,2026-12-07,2026-12-12,hermano,Coordinar al pulidor y confirmar el agua,
-7,2026-12-07,2026-12-12,otros oficios,Desbaste del piso de granito,38
-8,2026-12-14,2026-12-19,albañil,Limpieza final,40
-8,2026-12-14,2026-12-19,hermano,Entrega y lista de pendientes,41
-8,2026-12-14,2026-12-19,otros oficios,Brillado del piso de granito,39
-9,2026-12-21,2026-12-23,albañil,Zócalos (solo si se cambian),"Z1,Z2,Z3"
-9,2026-12-21,2026-12-23,hermano,Comprar los zócalos (solo si se cambian),
-9,2026-12-21,2026-12-23,otros oficios,Sin visitas programadas,
+semana,inicio_semana,persona,objetivo,cumplido,comentario
+1,2026-10-26,Albañil,Demoler parte alta del muro; viga con anticorrosivo instalada y puntales retirados; puntos eléctricos reubicados; rejilla retirada; muretes hasta el techo (H1),,
+1,2026-10-26,Hermano,Aviso a la administración; agua provisional para la obra; seguimiento a Triple A; compras; escombros; verificar H1,,
+1,2026-10-26,Otros oficios,Drywall: desmonte del machimbre (30) y cielo de la sala desde el 31. Aluminio: medir la ventana (30),,
+2,2026-11-02,Albañil,"Redes de cocina y labores (prueba con bomba); muro bajo a 1,2 m y pañetes; muretes enchapados (H2)",,
+2,2026-11-02,Hermano,Citar a carpintero y proveedor de piedra el sáb 7; comprar material del baño social; pedir la visita de Gases del Caribe; Triple A con fecha de instalación a más tardar el vie 6; pedir 2 o 3 cotizaciones de pulido; verificar H2,,
+2,2026-11-02,Otros oficios,Drywall: cielo de la sala (hasta el 5). Carpintero: medidas (7),,
+3,2026-11-09,Albañil,Demoler baño social (9–10); redes (11–12); impermeabilizar ducha (13); conectar estufa (sáb 14),,
+3,2026-11-09,Hermano,Agua de Triple A instalada (meta mar 10); prueba de agua de 48 h con fotos (14–15); medir vidrios contra el vano de la ducha; aprobar con Carlos el diseño de carpintería; encargar la piedra,,
+3,2026-11-09,Otros oficios,"Aluminio: ventana (9). Drywall: cielo de cocina (9–11). Carpintero: mueble de cocina (12), Carlos paga el saldo de 1,2 M",,
+4,2026-11-16,Albañil,"Pañetes y enchape del baño social (17–20); sanitario, ducha y grifería (sáb 21) (H3)",,
+4,2026-11-16,Hermano,Recibir a Gases del Caribe (mar 17); comprar material del baño principal; verificar H3,,
+4,2026-11-16,Otros oficios,Gases del Caribe (17). Drywall: cielo del baño social (21). Aluminio: división de ducha (21),,
+5,2026-11-23,Albañil,"Demoler baño principal (23–24); redes (25–26); impermeabilizar ducha (27); si se aprueban, empezar a retirar zócalos (sáb 28)",,
+5,2026-11-23,Hermano,Escombros; prueba de agua de 48 h con fotos (28–29),,
+5,2026-11-23,Otros oficios,Carpintero: termina de fabricar (23),,
+6,2026-11-30,Albañil,"Terminar de retirar zócalos (lun 30, si se aprueban); pañetes y enchape del baño principal (1–4); sanitario, ducha y grifería (sáb 5) (H4)",,
+6,2026-11-30,Hermano,Comprar pintura; contratar al pulidor; piedra de la barra en obra; verificar H4,,
+6,2026-11-30,Otros oficios,"Aluminio: división de ducha (5). Carpintero: vinera, almacenamiento y muebles de baño (5)",,
+7,2026-12-07,Albañil,"Lavamanos sobre sus muebles (7); piedra de la barra con pestaña y sellante (9); resanar la franja de zócalos (10, si se aprueban); empezar a pintar (11)",,
+7,2026-12-07,Hermano,Verificar lavamanos y piedra; lista de pendientes por espacio,,
+8,2026-12-14,Albañil,"Terminar la pintura (15); instalar zócalos nuevos (desde el sáb 19, si se aprueban)",,
+8,2026-12-14,Hermano,Proteger muebles y muros para el pulido; verificar pintura y piso,,
+8,2026-12-14,Otros oficios,"Pulidor: desbaste, pulido y brillado del piso (16–18)",,
+9,2026-12-21,Albañil,Terminar zócalos (21); pendientes de la lista (H5),,
+9,2026-12-21,Hermano,"Aseo final, entrega y verificación de H5",,

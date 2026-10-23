@@ -1,6 +1,6 @@
-id,nombre,criterio,fecha_prevista,valor,descuento,valor_a_pagar,fecha_cumplido,pagado,fecha_pago,notas
-H1,Demolición y viga,"Muro cocina–sala demolido, viga de acero instalada, cocina y baños demolidos, escombros fuera",2026-10-31,900000,200000,,,no,,Se descuentan los 200.000 entregados a cuenta
-H2,Instalaciones ocultas,"Agua, desagües, red eléctrica y gas instalados y probados. Pañetes, impermeabilización y afinados listos",2026-11-14,900000,0,,,no,,
-H3,Enchapes y prueba con agua,Baños y salpicadero enchapados. Prueba con agua de la red sin fugas,2026-11-21,900000,0,,,no,,Requiere agua de Triple A
-H4,Aparatos y acabados,"Mesón, lavamanos, sanitarios, grifería y luces instalados y funcionando. Pintura lista",2026-12-05,900000,0,,,no,,
-H5,Entrega,"Retoques terminados, piso brillado, apartamento limpio y pendientes cerrados",2026-12-18,900000,0,,,no,,
+hito,nombre,fecha_estimada,criterio,valor,descuento,valor_a_pagar,fecha_cumplido,pagado,fecha_pago,nota
+H1,Cocina abierta,2026-10-31,"Muro demolido, viga instalada sobre muro sano, puntales retirados, puntos eléctricos reubicados, rejilla retirada, muretes del área de labores hasta el techo",900000,200000,700000,,no,,Descuento: 200.000 ya entregados a cuenta
+H2,Cocina en obra gris,2026-11-07,"Redes de cocina y labores probadas sin fugas, muro bajo a 1,2 m, pañetes del lado de la sala, muretes enchapados",900000,0,900000,,no,,
+H3,Baño social,2026-11-21,"Prueba de agua aprobada, piso y muros enchapados, sanitario, ducha y grifería sin fugas con agua de la red; estufa conectada",900000,0,900000,,no,,
+H4,Baño principal,2026-12-05,Igual que H3 para el baño principal,900000,0,900000,,no,,vie 4 dic si no se hacen zócalos
+H5,Entrega,2026-12-23,"Lavamanos sobre sus muebles, piedra de la barra con pestaña y sellante, certificado de Gases del Caribe, pintura terminada, pendientes del albañil cerrados",900000,0,900000,,no,,vie 18 dic si no se hacen zócalos

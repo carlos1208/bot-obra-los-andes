@@ -25,7 +25,7 @@ Deno.test("catálogo F01–F24 con códigos únicos y botones que caben", () => 
 Deno.test("nombres de archivos y carpetas en Drive", () => {
   assertEquals(nombreFoto("ANTES", "2026-10-24", 1), "ANTES 2026-10-24 (1).jpg");
   assertEquals(nombreFoto("DESPUÉS", "2026-10-31", 2, "png"), "DESPUÉS 2026-10-31 (2).png");
-  assertEquals(nombreCarpetaPar("F01", "Muro cocina–sala desde la sala"), "F01 Muro cocina–sala desde la sala");
+  assertEquals(nombreCarpetaPar("F01", "Muro cocina–sala completo"), "F01 Muro cocina–sala completo");
 });
 
 Deno.test("appProperties caben en 124 bytes", () => {

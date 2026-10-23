@@ -136,5 +136,5 @@ export function valorPropiedad(clave: string, valor: string): string {
 }
 
 export function propiedades(p: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(Object.entries(p).map(([k, v]) => [k, valorPropiedad(k, v)]));
+  return Object.fromEntries(Object.entries(p).filter(([, v]) => v !== "").map(([k, v]) => [k, valorPropiedad(k, v)]));
 }

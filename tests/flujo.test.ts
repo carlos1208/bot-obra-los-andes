@@ -235,18 +235,18 @@ Deno.test("fotos ANTES: catálogo, una por una y «Listo»", async () => {
   await procesar(mensaje(CARLOS, foto("a1"), GRUPO, TEMA_FOTOS));
   assertStringIncludes(ultimoTexto(), "Guardé 1 foto de F01. Van 1 de 3.");
   await procesar(toque(CARLOS, "ant:fin", GRUPO, TEMA_FOTOS));
-  assertStringIncludes(ultimoTexto(), "Listo: F01 · Muro cocina–sala desde la sala quedó con 1 foto ANTES.");
+  assertStringIncludes(ultimoTexto(), "Listo: F01 · Muro cocina–sala completo quedó con 1 foto ANTES.");
 
-  const carpeta = drive.find((a) => a.name === "F01 Muro cocina–sala desde la sala")!;
+  const carpeta = drive.find((a) => a.name === "F01 Muro cocina–sala completo")!;
   assertEquals(carpeta.parents, [drive.find((a) => a.name === "Antes y después")!.id]);
   const archivo = drive.find((a) => a.parents.includes(carpeta.id))!;
   assertEquals(archivo.name.replace(/\d{4}-\d{2}-\d{2}/, "FECHA"), "ANTES FECHA (1).jpg");
   assertEquals(archivo.appProperties, {
     codigo: "F01",
-    nombre: "Muro cocina–sala desde la sala",
+    nombre: "Muro cocina–sala completo",
     tipo: "antes",
-    tareas: "02,03",
-    hitos: "H1",
+    tareas: "02,09",
+    hitos: "H1,H2",
     subido_por: "carlos",
     estado: "sin después",
   });
@@ -272,7 +272,7 @@ Deno.test("fotos ANTES: álbum que llega antes de elegir el código", async () =
   assertEquals((tablas.album_buffer ?? []).length, 0);
 
   await procesar(toque(CARLOS, "ant:c:F09"));
-  const carpeta = drive.find((a) => a.name === "F09 Baño 1: vista general")!;
+  const carpeta = drive.find((a) => a.name === "F09 Techo de la cocina y del área de labores")!;
   const fotos = drive.filter((a) => a.parents.includes(carpeta.id)).map((a) =>
     a.name.replace(/\d{4}-\d{2}-\d{2}/, "F")
   );
@@ -291,7 +291,7 @@ Deno.test("el hermano no sube ANTES y un error no le muestra detalles técnicos"
   limpiar();
   const erroresAntes = (tablas.errores ?? []).length;
   const guardado = hoja.Config;
-  hoja.Config = [["parametro", "valor"]]; // Config rota: falta fecha_inicio
+  hoja.Config = [["clave", "valor"]]; // Config rota: falta fecha_inicio
   await procesar(mensaje(HERMANO, { text: "/estado" }, GRUPO, TEMA_REPORTES));
   hoja.Config = guardado;
   const alHermano = enviados.find((e) => e.params.chat_id === GRUPO)!;

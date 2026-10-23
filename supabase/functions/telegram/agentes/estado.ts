@@ -40,9 +40,9 @@ export async function estado(ctx: Ctx, hoy = hoyISO()): Promise<void> {
       lineas.push("", "<b>Tareas de hoy</b>");
       if (!deHoy.length) lineas.push("No hay tareas programadas.");
       for (const t of deHoy) {
-        const extra = [t.oficio, t.estado === "en curso" ? "en curso" : "", t.tentativo ? "tentativa" : ""]
+        const extra = [t.responsable, t.estado === "en curso" ? "en curso" : "", t.tentativo ? "tentativa" : ""]
           .filter(Boolean).join(", ");
-        lineas.push(`• ${escaparHtml(t.id)} ${escaparHtml(t.descripcion)} (${escaparHtml(extra)})`);
+        lineas.push(`• ${escaparHtml(t.id)} ${escaparHtml(t.tarea)} (${escaparHtml(extra)})`);
       }
     }
   }
