@@ -41,6 +41,10 @@ tests/                    deno test
 Todo se corre desde la carpeta del repo en tu PC. Los secretos van solo en `.env.local` (está en `.gitignore`) y en
 `supabase secrets set`. Nunca en el código ni en el chat.
 
+Algunos scripts escriben en `.env.local` (`secreto`, `cuenta-servicio`, `oauth-drive`). **Cierra el Bloc de notas antes
+de correrlos**: si lo guardas después, escribe su copia vieja encima. `deno task revisar` muestra qué valores están
+llenos sin mostrarlos.
+
 ### 0. Herramientas
 
 1. Instala Deno. En PowerShell: `irm https://deno.land/install.ps1 | iex`
