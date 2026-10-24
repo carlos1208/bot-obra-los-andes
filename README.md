@@ -74,6 +74,9 @@ Todo se corre desde la carpeta del repo en tu PC. Los secretos van solo en `.env
 2. Tú le escribes `/start` al bot por privado.
 3. Corre `deno task ids` y copia los valores en `.env.local`: `CARLOS_TG_ID`, `HERMANO_TG_ID`, `GROUP_CHAT_ID`,
    `TOPIC_REPORTES_ID`, `TOPIC_FOTOS_ID`, `TOPIC_GASTOS_ID`.
+4. Si tu hermano todavía no está en el grupo, deja `HERMANO_TG_ID` vacío: el bot funciona solo para ti. Cuando entre,
+   corre `deno task ids --borrar-webhook`, escribe en un tema, `deno task ids` y vuelve a activar con
+   `deno task webhook`.
 
 ### 4. Google Cloud: cuenta de servicio para la hoja
 
