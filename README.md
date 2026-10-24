@@ -83,10 +83,10 @@ Todo se corre desde la carpeta del repo en tu PC. Los secretos van solo en `.env
 1. En <https://console.cloud.google.com> crea el proyecto «obra-los-andes».
 2. APIs y servicios → Biblioteca → habilita **Google Sheets API** y **Google Drive API**.
 3. IAM → Cuentas de servicio → Crear. Nombre «bot-hoja». Sin roles.
-4. En la cuenta → Claves → Agregar clave → JSON. Del archivo descargado copia:
-   - `client_email` → `GOOGLE_SA_EMAIL`
-   - `private_key` → `GOOGLE_SA_PRIVATE_KEY`, entre comillas dobles y con los `\n` tal cual.
-5. Borra el JSON descargado.
+4. En la cuenta → Claves → Agregar clave → JSON. Se descarga un archivo `.json`.
+5. Corre `deno task cuenta-servicio "C:\ruta\al\archivo.json"`. Guarda `GOOGLE_SA_EMAIL` y `GOOGLE_SA_PRIVATE_KEY` en
+   `.env.local` y muestra el correo con el que vas a compartir la hoja.
+6. Borra el JSON descargado.
 
 ### 5. La hoja
 
