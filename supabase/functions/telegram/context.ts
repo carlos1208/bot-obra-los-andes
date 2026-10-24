@@ -1,6 +1,6 @@
 // Quién escribe, desde dónde y cómo responderle en el mismo chat y tema.
 
-import { envNumber } from "../_shared/env.ts";
+import { envNumber, optionalEnvNumber } from "../_shared/env.ts";
 import type { Config } from "../_shared/site.ts";
 import { type CallbackQuery, type Keyboard, type Message, sendMessage, type Update } from "../_shared/telegram.ts";
 
@@ -25,7 +25,8 @@ export interface Context {
 export function roleOf(userId: number | undefined): Role | null {
   if (userId === undefined) return null;
   if (userId === envNumber("CARLOS_TG_ID")) return "carlos";
-  if (userId === envNumber("HERMANO_TG_ID")) return "hermano";
+  // Mientras HERMANO_TG_ID esté vacío, solo Carlos usa el bot.
+  if (userId === optionalEnvNumber("HERMANO_TG_ID")) return "hermano";
   return null;
 }
 

@@ -206,6 +206,21 @@ Deno.test("update repetido se procesa una sola vez", async () => {
   assertEquals(sent.filter((e) => e.method === "sendMessage").length, 1);
 });
 
+Deno.test("sin HERMANO_TG_ID el bot sigue funcionando para Carlos", async () => {
+  clearSent();
+  Deno.env.delete("HERMANO_TG_ID");
+  try {
+    await processUpdate(message(CARLOS, { text: "/estado" }));
+    await processUpdate(message(BROTHER, { text: "/estado" }, GROUP, REPORTS_TOPIC));
+  } finally {
+    Deno.env.set("HERMANO_TG_ID", String(BROTHER));
+  }
+  const replies = sent.filter((e) => e.method === "sendMessage");
+  assertEquals(replies.length, 1);
+  assertEquals(replies[0].params.chat_id, CARLOS);
+  assertStringIncludes(String(replies[0].params.text), "ESTADO");
+});
+
 Deno.test("/estado en el tema Reportes responde en el mismo tema y sin dinero", async () => {
   clearSent();
   await processUpdate(message(BROTHER, { text: "/estado@ObraBot" }, GROUP, REPORTS_TOPIC));

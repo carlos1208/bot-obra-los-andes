@@ -12,6 +12,11 @@ export function envNumber(name: string): number {
   return n;
 }
 
+/** Para secretos que pueden faltar por un tiempo (p. ej. HERMANO_TG_ID). */
+export function optionalEnvNumber(name: string): number | null {
+  return Deno.env.get(name) ? envNumber(name) : null;
+}
+
 /** Clave secreta de Supabase: la nueva (SUPABASE_SECRET_KEYS) o la heredada. */
 export function supabaseSecretKey(): string {
   const keys = Deno.env.get("SUPABASE_SECRET_KEYS");

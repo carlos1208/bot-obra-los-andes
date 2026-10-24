@@ -71,4 +71,4 @@ console.log(`TOPIC_REPORTES_ID=${topic("reportes")}`);
 console.log(`TOPIC_FOTOS_ID=${topic("antes y despues")}`);
 console.log(`TOPIC_GASTOS_ID=${topic("gastos")}`);
 console.log("CARLOS_TG_ID=   ← tu id de la lista de usuarios");
-console.log("HERMANO_TG_ID=  ← el id de tu hermano");
+console.log("HERMANO_TG_ID=  ← el id de tu hermano (déjalo vacío si todavía no está en el grupo)");
