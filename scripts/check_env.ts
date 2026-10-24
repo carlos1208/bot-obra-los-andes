@@ -5,8 +5,8 @@ import { loadEnv } from "./_env.ts";
 
 await loadEnv();
 const keys = Object.keys(parse(await Deno.readTextFile(".env.example")));
-// Se llenan en pasos posteriores o pueden esperar.
-const later = new Set(["HERMANO_TG_ID", "GEMINI_API_KEY"]);
+// Puede esperar: el bot funciona sin el hermano.
+const later = new Set(["HERMANO_TG_ID"]);
 let missing = 0;
 for (const k of keys) {
   const filled = Boolean(Deno.env.get(k));

@@ -17,8 +17,8 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 
 | Fase                   | Qué incluye                                                                                                     | Estado        |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------- | ------------- |
-| 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | **En prueba** |
-| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Pendiente     |
+| 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista         |
+| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | **En prueba** |
 | 3. MVP                 | Reporte diario y gastos con caja menor                                                                          | Pendiente     |
 | 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre»                                         | Pendiente     |
 | 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Pendiente     |
@@ -28,10 +28,10 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 
 ```
 semillas/                 CSV de cada pestaña, catálogo fotos_antes.json, facturas_esperadas.csv
-scripts/                  Scripts locales: ids de Telegram, crear la hoja, OAuth de Drive, webhook
+scripts/                  Scripts locales: ids de Telegram, crear la hoja, OAuth de Drive, webhook, validar la IA
 supabase/migrations/      Tablas técnicas (updates, sesiones, álbumes, reintentos, errores)
 supabase/functions/
-  _shared/                Clientes de Telegram, Sheets, Drive y Postgres; reglas de la obra
+  _shared/                Clientes de Telegram, Sheets, Drive, Gemini y Postgres; extractores; reglas de la obra
   telegram/               Webhook, enrutador y agentes
 tests/                    deno test
 ```
@@ -136,6 +136,15 @@ permiso mínimo `drive.file`: el bot solo ve lo que él mismo crea.
 `deno task webhook` activa el webhook con `secret_token`, deja solo `message` y `callback_query` y registra los comandos
 `/estado` y `/antes`.
 
+### 9. Gemini (fase 2)
+
+1. En <https://aistudio.google.com> entra con tu Gmail y acepta los términos.
+2. Como ya tienes el proyecto «obra-los-andes» en Google Cloud, AI Studio no crea uno solo: menú izquierdo → Dashboard →
+   **Projects** → **Import projects** → elige «obra-los-andes» → **Import**.
+3. Dashboard → **API Keys** → **Create API key** en ese proyecto. No actives facturación: sin ella la clave queda en el
+   nivel gratuito.
+4. Copia la clave en `GEMINI_API_KEY` de `.env.local` y corre `deno task secretos`.
+
 ### Prueba de la fase 1
 
 - `/estado` en el tema Reportes → semana de obra y tareas de hoy, **sin dinero**.
@@ -143,6 +152,21 @@ permiso mínimo `drive.file`: el bot solo ve lo que él mismo crea.
 - Cambia en la hoja las fechas de una tarea para que caiga hoy y repite `/estado`: debe salir de una vez.
 - `/antes` en el tema «Antes y después» → elige F01 → manda 1 a 3 fotos → «Listo». Revisa en Drive
   `Obra Los Andes/Antes y después/F01 …/ANTES AAAA-MM-DD (1).jpg`.
+
+### Prueba de la fase 2
+
+Necesitas la foto de una factura impresa (tomada con el celular) y una nota de voz de Telegram en `.ogg` (en Telegram
+Desktop o en <https://web.telegram.org>: clic derecho sobre la nota → Guardar como / Descargar).
+
+```
+deno task validar-ia --facturas "C:\Users\Carlos\Documents\Documentos personales\Los Andes\05 Facturas y pagos\Facturas" --foto "C:\ruta\factura.jpg" --voz "C:\ruta\nota.ogg"
+```
+
+- Lee los capítulos de `Presupuesto` en la hoja y pasa a Gemini las 4 facturas PDF y la foto.
+- Compara número, fecha y total con `semillas/facturas_esperadas.csv`. El número se compara sin espacios ni guiones.
+- Si el modelo principal falla en alguna de las 4, repite con el de respaldo y dice cuál quedó.
+- Transcribe y resume la nota de voz (`audio/ogg`) con el modelo que quedó.
+- **Criterio:** número, fecha y total exactos en las 4 facturas PDF. La foto y la nota de voz se revisan a ojo.
 
 ## Uso diario
 
