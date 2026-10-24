@@ -126,7 +126,7 @@ permiso mínimo `drive.file`: el bot solo ve lo que él mismo crea.
    npx supabase login
    npx supabase link --project-ref <PROJECT_REF>
    npx supabase db push
-   npx supabase secrets set --env-file .env.local
+   deno task secretos
    npx supabase functions deploy telegram --use-api
    ```
    `--use-api` empaqueta en Supabase y no necesita Docker.
@@ -159,12 +159,12 @@ permiso mínimo `drive.file`: el bot solo ve lo que él mismo crea.
 
 ## Rotar claves
 
-Después de cambiar cualquier valor en `.env.local`: `npx supabase secrets set --env-file .env.local`.
+Después de cambiar cualquier valor en `.env.local`: `deno task secretos`.
 
 | Clave                        | Cómo                                                                                           |
 | ---------------------------- | ---------------------------------------------------------------------------------------------- |
 | `TELEGRAM_BOT_TOKEN`         | BotFather → `/revoke`. Pega el nuevo token y corre `deno task webhook`.                        |
-| `TELEGRAM_WEBHOOK_SECRET`    | `deno task secreto`, `secrets set` y `deno task webhook`.                                      |
+| `TELEGRAM_WEBHOOK_SECRET`    | `deno task secreto`, `deno task secretos` y `deno task webhook`.                               |
 | `GOOGLE_SA_PRIVATE_KEY`      | Crea una clave nueva en la cuenta de servicio, cámbiala y borra la vieja.                      |
 | `GOOGLE_OAUTH_REFRESH_TOKEN` | Quita el acceso en <https://myaccount.google.com/connections> y corre `deno task oauth-drive`. |
 | `GEMINI_API_KEY`             | Crea una nueva en Google AI Studio y borra la vieja.                                           |
