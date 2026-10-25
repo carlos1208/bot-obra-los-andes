@@ -77,7 +77,7 @@ export async function start(ctx: Context, pending: ReceivedImage[] = []): Promis
     await ctx.reply(`Ya están todas las fotos ANTES del catálogo (${CATALOG.length}).`);
     return;
   }
-  await saveSession(ctx.chatId, ctx.userId, FLOW, "choose", { pending });
+  await saveSession(ctx.chatId, ctx.userId, FLOW, "choose", { pending, hilo: ctx.threadId ?? null });
   const n = pending.length;
   const question = n
     ? `Recibí ${n} foto${n > 1 ? "s" : ""}. ¿De cuál foto ANTES ${n > 1 ? "son" : "es"}?`
@@ -126,7 +126,7 @@ export async function onButton(ctx: Context): Promise<void> {
       `<b>${photo.codigo} · ${escapeHtml(photo.nombre)}</b>\nEncuadre: ${escapeHtml(photo.encuadre)}`,
     );
     const pending = session.datos.pending ?? [];
-    await saveSession(ctx.chatId, ctx.userId, FLOW, "photos", { code: photo.codigo });
+    await saveSession(ctx.chatId, ctx.userId, FLOW, "photos", { code: photo.codigo, hilo: ctx.threadId ?? null });
     if (pending.length) {
       await receivePhotos(ctx, photo, pending);
     } else {
@@ -143,7 +143,7 @@ export async function resume(ctx: Context, session: Session<FlowData>): Promise<
   if (session.paso === "choose") {
     if (images.length) {
       const pending = [...(session.datos.pending ?? []), ...images];
-      await saveSession(ctx.chatId, ctx.userId, FLOW, "choose", { pending });
+      await saveSession(ctx.chatId, ctx.userId, FLOW, "choose", { pending, hilo: ctx.threadId ?? null });
       const many = pending.length > 1;
       await ctx.reply(
         `Tengo ${pending.length} foto${many ? "s" : ""}. Elige arriba de cuál foto ANTES ${many ? "son" : "es"}.`,
@@ -217,7 +217,7 @@ async function receivePhotos(ctx: Context, photo: CatalogPhoto, images: Received
     await finish(ctx, photo.codigo);
     return;
   }
-  await saveSession(ctx.chatId, ctx.userId, FLOW, "photos", { code: photo.codigo });
+  await saveSession(ctx.chatId, ctx.userId, FLOW, "photos", { code: photo.codigo, hilo: ctx.threadId ?? null });
   const summary = added
     ? `Guardé ${added} foto${
       added > 1 ? "s" : ""

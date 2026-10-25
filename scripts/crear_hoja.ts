@@ -7,7 +7,7 @@
 //   deno task crear-hoja --reemplazar todas       (borra Reportes, Gastos y Pagos: cuidado)
 import { parse } from "jsr:@std/csv@1.0.6";
 import { loadEnv, required } from "./_env.ts";
-import { sheetsFetch, toCell } from "../supabase/functions/_shared/sheets.ts";
+import { columnLetter, sheetsFetch, toCell } from "../supabase/functions/_shared/sheets.ts";
 
 await loadEnv();
 for (const n of ["SHEET_ID", "GOOGLE_SA_EMAIL", "GOOGLE_SA_PRIVATE_KEY"]) required(n);
@@ -51,9 +51,6 @@ for (const t of replace) {
     Deno.exit(1);
   }
 }
-
-const columnLetter = (c: number): string =>
-  (c < 26 ? "" : columnLetter(Math.floor(c / 26) - 1)) + String.fromCharCode(65 + (c % 26));
 
 async function readCsv(tab: string): Promise<string[][]> {
   return parse(await Deno.readTextFile(`semillas/${tab}.csv`));

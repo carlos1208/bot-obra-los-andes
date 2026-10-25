@@ -116,8 +116,9 @@ export async function editKeyboard(chatId: number, messageId: number, keyboard?:
   });
 }
 
-export async function answerCallback(id: string, text?: string) {
-  return await tg("answerCallbackQuery", { callback_query_id: id, text });
+/** Responde al toque de un botón. Si ya venció (p. ej. en un reintento), no pasa nada. */
+export async function answerCallback(id: string, text?: string): Promise<void> {
+  await tg("answerCallbackQuery", { callback_query_id: id, text }).catch(() => {});
 }
 
 /** Descarga un archivo de Telegram (máximo 20 MB). */
@@ -151,6 +152,16 @@ export function imageOf(m: Message): ReceivedImage | null {
       mime: m.document.mime_type,
       extension: ext === "jpeg" ? "jpg" : ext,
     };
+  }
+  return null;
+}
+
+/** Factura que llega como foto, archivo de imagen o PDF. */
+export function invoiceFileOf(m: Message): ReceivedImage | null {
+  const image = imageOf(m);
+  if (image) return image;
+  if (m.document?.mime_type === "application/pdf") {
+    return { fileId: m.document.file_id, size: m.document.file_size, mime: "application/pdf", extension: "pdf" };
   }
   return null;
 }

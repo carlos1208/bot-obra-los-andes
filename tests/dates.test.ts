@@ -1,6 +1,13 @@
 import { assertEquals } from "jsr:@std/assert@1.0.19";
-import { cellDate, shortDate, todayISO } from "../supabase/functions/_shared/format.ts";
-import { isWorkDay, parseWorkDays, readConfig, weekRange, workWeek } from "../supabase/functions/_shared/site.ts";
+import { cellDate, parseDateInput, shortDate, todayISO } from "../supabase/functions/_shared/format.ts";
+import {
+  isWorkDay,
+  nextWorkDay,
+  parseWorkDays,
+  readConfig,
+  weekRange,
+  workWeek,
+} from "../supabase/functions/_shared/site.ts";
 import { seedRows } from "./_rows.ts";
 
 const cfg = readConfig(await seedRows("Config"));
@@ -64,4 +71,23 @@ Deno.test("días de obra: lunes a sábado sin festivos", () => {
   assertEquals(isWorkDay("2026-11-16", cfg), false); // festivo
   assertEquals(isWorkDay("2026-12-08", cfg), false); // festivo
   assertEquals(isWorkDay("2026-12-09", cfg), true);
+});
+
+Deno.test("fechas escritas al corregir un campo", () => {
+  const today = "2026-10-28";
+  assertEquals(parseDateInput("hoy", today), "2026-10-28");
+  assertEquals(parseDateInput("Ayer", today), "2026-10-27");
+  assertEquals(parseDateInput("antier", today), "2026-10-26");
+  assertEquals(parseDateInput("24/10", today), "2026-10-24");
+  assertEquals(parseDateInput("3-11", today), "2026-11-03");
+  assertEquals(parseDateInput("24/10/2026", today), "2026-10-24");
+  assertEquals(parseDateInput("24-10-2026", today), "2026-10-24");
+  assertEquals(parseDateInput("2026-10-24", today), "2026-10-24");
+  assertEquals(parseDateInput("31/02", today), null);
+  assertEquals(parseDateInput("el martes", today), null);
+});
+
+Deno.test("siguiente día laboral salta domingos y festivos", () => {
+  assertEquals(nextWorkDay("2026-10-28", cfg), "2026-10-29");
+  assertEquals(nextWorkDay("2026-10-31", cfg), "2026-11-03"); // dom 1 y lun 2 nov (festivo)
 });

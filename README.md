@@ -18,8 +18,8 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 | Fase                   | Qué incluye                                                                                                     | Estado        |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------- | ------------- |
 | 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista         |
-| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | **En prueba** |
-| 3. MVP                 | Reporte diario y gastos con caja menor                                                                          | Pendiente     |
+| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista         |
+| 3. MVP                 | Enrutador, reporte diario con selección múltiple, gastos con caja menor y cola de reintentos                    | **En prueba** |
 | 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre»                                         | Pendiente     |
 | 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Pendiente     |
 | 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Pendiente     |
@@ -134,7 +134,7 @@ permiso mínimo `drive.file`: el bot solo ve lo que él mismo crea.
 ### 8. Webhook
 
 `deno task webhook` activa el webhook con `secret_token`, deja solo `message` y `callback_query` y registra los comandos
-`/estado` y `/antes`.
+`/reporte`, `/gasto`, `/estado` y `/antes`.
 
 ### 9. Gemini (fase 2)
 
@@ -170,6 +170,28 @@ deno task validar-ia --facturas "C:\Users\Carlos\Documents\Documentos personales
 - **Criterio:** número, fecha y total exactos en las 4 facturas PDF. Las fotos que no están en el CSV y la nota de voz
   se revisan a ojo.
 
+### Prueba de la fase 3
+
+Antes: `git pull`, `deno task test`, `npx supabase functions deploy telegram --use-api` y `deno task webhook` (registra
+`/reporte` y `/gasto` en el menú). Mientras tu hermano no esté, haz todo tú: el bot te deja reportar y registrar
+compras. Prueba desde el lun 26 oct: antes no hay tareas en la semana.
+
+- **Reporte completo** en el tema Reportes con `/reporte`:
+  1. Marca dos tareas → «Listo» → una «Terminada» y otra «Avanzó».
+  2. Revisa el avance del objetivo, la caja menor y toca «Agregar compra»: registra una factura y verifica que vuelve al
+     reporte con la compra y el saldo nuevo.
+  3. Si hay algo esperado hoy, marca «No llegó» en uno: te debe llegar el aviso por privado en ese momento.
+  4. Agua, novedades con «Otro» por nota de voz y para mañana.
+  5. En la vista previa toca «Corregir sección», cambia una y luego «Sí, guardar». Revisa la fila en `Reportes`, el
+     `estado` en `Tareas`, `llego` en `Esperado` y el resumen por privado.
+- **Compra por caja menor** en el tema Gastos: foto de una factura de menos de $100.000 → «Caja menor» → «Corregir
+  campo» en algo → «Sí, guardar». Revisa la fila en `Gastos`, la foto en Drive `Facturas/` y el saldo de la caja.
+- **Compra por encima del tope:** factura de más de $100.000 con «Caja menor» → debe pasar a «Pagó Carlos» y avisarte
+  por privado.
+- La sección «Fotos» del reporte sale con «—» hasta la fase 4.
+- **Opcional:** reporte en texto libre o nota de voz en el tema Reportes, un PDF de factura por tu privado y una compra
+  sin factura (máximo $10.000 y una por día).
+
 ## Uso diario
 
 - **Cambiar el modelo de Gemini:** `npx supabase secrets set GEMINI_MODEL=<modelo>` (o `GEMINI_MODEL_FALLBACK`). No hay
@@ -180,6 +202,9 @@ deno task validar-ia --facturas "C:\Users\Carlos\Documents\Documentos personales
   desplegar `telegram`. Una prueba falla si las dos copias no son iguales.
 - **Pruebas:** `deno task test`. Revisión de tipos: `deno task check`.
 - **Errores:** quedan en la tabla `errores` y te llega una línea por privado. Tu hermano nunca ve detalles técnicos.
+- **Gemini sin cuota (429):** el bot responde «Lo proceso en unos minutos», guarda el mensaje en `cola_reintentos` y lo
+  reintenta al minuto. Si sigue sin cuota, espera más (2, 5, 10… hasta 60 min) y el reintento corre con el siguiente
+  mensaje que llegue.
 - **Proyecto en pausa:** Supabase pausa los proyectos gratuitos que pasan una semana sin actividad. Con el bot en uso no
   debería pasar; si pasa, se reactiva desde el panel.
 

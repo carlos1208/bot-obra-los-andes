@@ -170,6 +170,28 @@ export function tasksForWeek(tasks: Task[], iso: string): Task[] {
   return tasks.filter((t) => isOpen(t) && t.inicio && t.inicio <= saturday && t.fin >= monday);
 }
 
+/**
+ * Avance del objetivo semanal: de las tareas (no tentativas) cuyo `fin` cae en la semana de la fecha,
+ * cuántas están terminadas en la hoja o se marcan terminadas ahora.
+ */
+export function weeklyObjective(
+  tasks: Task[],
+  iso: string,
+  finishedNow: string[] = [],
+): { done: number; total: number } {
+  const { monday, saturday } = weekRange(iso);
+  const due = tasks.filter((t) => !t.tentativo && t.fin >= monday && t.fin <= saturday);
+  const done = due.filter((t) => t.estado === "terminada" || finishedNow.includes(t.id)).length;
+  return { done, total: due.length };
+}
+
+/** Siguiente día laboral después de la fecha (salta domingos y festivos). */
+export function nextWorkDay(iso: string, cfg: Config): string {
+  let day = addDays(iso, 1);
+  for (let i = 0; i < 14 && !isWorkDay(day, cfg); i++) day = addDays(day, 1);
+  return day;
+}
+
 // --- Dinero ------------------------------------------------------------------
 
 function sum(rows: Row[], column: string, filter: (r: Row) => boolean): number {

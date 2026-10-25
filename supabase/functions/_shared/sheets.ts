@@ -24,6 +24,10 @@ export async function sheetsFetch<T = unknown>(
   return data as T;
 }
 
+/** Letra de la columna: 0 → A, 26 → AA. */
+export const columnLetter = (c: number): string =>
+  (c < 26 ? "" : columnLetter(Math.floor(c / 26) - 1)) + String.fromCharCode(65 + (c % 26));
+
 /** Convierte una matriz con encabezados en filas con nombre de columna y número de fila. */
 export function toRows(values: unknown[][]): Row[] {
   if (!values.length) return [];
@@ -76,4 +80,47 @@ export function toCell(column: string, value: unknown): string | number | boolea
   if (s === "" || s.startsWith("=")) return s;
   if (TEXT_COLUMNS.has(column) || /^\d{1,2}:\d{2}$/.test(s) || /^0\d/.test(s)) return `'${s}`;
   return s;
+}
+
+/** Encabezados (fila 1) de una pestaña, leídos en este momento. */
+export async function readHeaders(tab: string): Promise<string[]> {
+  const data = await sheetsFetch<{ values?: unknown[][] }>(`/values/${encodeURIComponent(`'${tab}'!1:1`)}`);
+  return (data.values?.[0] ?? []).map((v) => String(v ?? "").trim());
+}
+
+function columnIndex(tab: string, headers: string[], column: string): number {
+  const c = headers.indexOf(column);
+  if (c < 0) throw new Error(`${tab}: no hay columna ${column}`);
+  return c;
+}
+
+/** Agrega una fila al final de la pestaña (append + USER_ENTERED), en el orden de sus encabezados. */
+export async function appendRow(tab: string, values: Record<string, unknown>): Promise<void> {
+  const headers = await readHeaders(tab);
+  for (const column of Object.keys(values)) columnIndex(tab, headers, column);
+  const row = headers.map((h) => toCell(h, values[h]));
+  const q = new URLSearchParams({ valueInputOption: "USER_ENTERED", insertDataOption: "INSERT_ROWS" });
+  await sheetsFetch(`/values/${encodeURIComponent(`'${tab}'!A1`)}:append?${q}`, {
+    method: "POST",
+    body: JSON.stringify({ values: [row] }),
+  });
+}
+
+/** Cambia celdas de filas ya leídas, p. ej. [{ row: 5, values: { estado: "terminada" } }]. */
+export async function updateCells(
+  tab: string,
+  changes: { row: number; values: Record<string, unknown> }[],
+): Promise<void> {
+  if (!changes.length) return;
+  const headers = await readHeaders(tab);
+  const data = changes.flatMap(({ row, values }) =>
+    Object.entries(values).map(([column, value]) => ({
+      range: `'${tab}'!${columnLetter(columnIndex(tab, headers, column))}${row}`,
+      values: [[toCell(column, value)]],
+    }))
+  );
+  await sheetsFetch("/values:batchUpdate", {
+    method: "POST",
+    body: JSON.stringify({ valueInputOption: "USER_ENTERED", data }),
+  });
 }

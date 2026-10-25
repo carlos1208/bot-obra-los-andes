@@ -78,6 +78,19 @@ export async function deleteSession(chatId: number, userId: number): Promise<voi
   if (error) throw new Error(`sesiones: ${error.message}`);
 }
 
+/** Pasa la sesión de `from` a `to` solo si sigue en `from`. Evita guardar dos veces con un doble toque. */
+export async function claimStep(chatId: number, userId: number, from: string, to: string): Promise<boolean> {
+  const { data, error } = await db()
+    .from("sesiones")
+    .update({ paso: to, actualizado_en: new Date().toISOString() })
+    .eq("chat_id", chatId)
+    .eq("user_id", userId)
+    .eq("paso", from)
+    .select("paso");
+  if (error) throw new Error(`sesiones: ${error.message}`);
+  return (data?.length ?? 0) > 0;
+}
+
 // --- Álbumes -----------------------------------------------------------------
 
 export async function bufferAlbumUpdate(mediaGroupId: string, update: unknown): Promise<string> {
@@ -113,6 +126,60 @@ export async function takeAlbum(mediaGroupId: string): Promise<unknown[]> {
   return (data ?? [])
     .sort((a, b) => String(a.recibido_en).localeCompare(String(b.recibido_en)))
     .map((r) => r.update);
+}
+
+// --- Cola de reintentos (Gemini sin cuota) -------------------------------------
+
+export interface QueuedUpdate {
+  id: number;
+  update: unknown;
+  intentos: number;
+  proximo_intento: string;
+}
+
+const inMs = (ms: number) => new Date(Date.now() + ms).toISOString();
+
+export async function enqueueRetry(payload: unknown, error: string, delayMs: number): Promise<void> {
+  const { error: e } = await db()
+    .from("cola_reintentos")
+    .insert({ update: payload, intentos: 0, proximo_intento: inMs(delayMs), error });
+  if (e) throw new Error(`cola_reintentos: ${e.message}`);
+}
+
+/** Toma los reintentos vencidos. Cada uno lo reclama un solo proceso (lo corre 10 min hacia adelante). */
+export async function claimDueRetries(limit = 3): Promise<QueuedUpdate[]> {
+  const { data, error } = await db()
+    .from("cola_reintentos")
+    .select("id, update, intentos, proximo_intento")
+    .lte("proximo_intento", new Date().toISOString())
+    .order("proximo_intento", { ascending: true })
+    .limit(limit);
+  if (error) throw new Error(`cola_reintentos: ${error.message}`);
+  const claimed: QueuedUpdate[] = [];
+  for (const item of (data ?? []) as QueuedUpdate[]) {
+    const { data: got, error: e } = await db()
+      .from("cola_reintentos")
+      .update({ proximo_intento: inMs(10 * 60_000) })
+      .eq("id", item.id)
+      .eq("proximo_intento", item.proximo_intento)
+      .select("id");
+    if (e) throw new Error(`cola_reintentos: ${e.message}`);
+    if (got?.length) claimed.push(item);
+  }
+  return claimed;
+}
+
+export async function rescheduleRetry(id: number, attempts: number, delayMs: number, error: string): Promise<void> {
+  const { error: e } = await db()
+    .from("cola_reintentos")
+    .update({ intentos: attempts, proximo_intento: inMs(delayMs), error })
+    .eq("id", id);
+  if (e) throw new Error(`cola_reintentos: ${e.message}`);
+}
+
+export async function deleteRetry(id: number): Promise<void> {
+  const { error } = await db().from("cola_reintentos").delete().eq("id", id);
+  if (error) throw new Error(`cola_reintentos: ${error.message}`);
 }
 
 // --- Errores -----------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1.0.19";
-import { readTasks, tasksForDay, tasksForWeek } from "../supabase/functions/_shared/site.ts";
+import { readTasks, tasksForDay, tasksForWeek, weeklyObjective } from "../supabase/functions/_shared/site.ts";
 import { row, seedRows } from "./_rows.ts";
 
 const tasks = readTasks(await seedRows("Tareas"));
@@ -49,4 +49,15 @@ Deno.test("las terminadas no aparecen y se respeta lo que diga la hoja", () => {
   ]);
   assertEquals(ids(tasksForDay(own, "2026-10-28")), ["03"]);
   assertEquals(ids(tasksForWeek(own, "2026-10-26")), ["03"]);
+});
+
+Deno.test("avance del objetivo semanal: tareas que terminan en la semana (sin las tentativas)", () => {
+  // Semana del lun 26 oct: terminan 01, 02, 03, 04, 05, 06 y 15.
+  assertEquals(weeklyObjective(tasks, "2026-10-28"), { done: 0, total: 7 });
+  assertEquals(weeklyObjective(tasks, "2026-10-28", ["03", "07"]), { done: 1, total: 7 }); // 07 termina después
+  const sheetDone = tasks.map((t) => t.id === "02" ? { ...t, estado: "terminada" } : t);
+  assertEquals(weeklyObjective(sheetDone, "2026-10-28", ["03"]), { done: 2, total: 7 });
+  // Semana de los zócalos: las tentativas no cuentan.
+  const zocalos = tasks.filter((t) => t.tentativo);
+  assertEquals(weeklyObjective(zocalos, zocalos[0].fin).total, 0);
 });

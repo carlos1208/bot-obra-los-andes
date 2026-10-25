@@ -2,6 +2,9 @@
 
 export const TIME_ZONE = "America/Bogota";
 
+/** Reloj del bot. Las pruebas lo cambian para simular la fecha. */
+export const clock = { now: (): Date => new Date() };
+
 const DAYS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
@@ -14,7 +17,7 @@ export function formatPesos(value: number): string {
 }
 
 /** Fecha de hoy en Bogotá como "AAAA-MM-DD". */
-export function todayISO(now: Date = new Date()): string {
+export function todayISO(now: Date = clock.now()): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: TIME_ZONE,
     year: "numeric",
@@ -24,7 +27,7 @@ export function todayISO(now: Date = new Date()): string {
 }
 
 /** Hora en Bogotá como "hh:mm" (24 h). */
-export function bogotaTime(now: Date = new Date()): string {
+export function bogotaTime(now: Date = clock.now()): string {
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: TIME_ZONE,
     hour: "2-digit",
@@ -80,6 +83,20 @@ export function cellDate(value: unknown): string | null {
   m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   return null;
+}
+
+/** Fecha escrita por el usuario: «hoy», «ayer», «24/10», «24/10/2026» o «2026-10-24». */
+export function parseDateInput(text: string, today: string): string | null {
+  const t = normalize(text);
+  if (t === "hoy") return today;
+  if (t === "ayer") return addDays(today, -1);
+  if (t === "anteayer" || t === "antier") return addDays(today, -2);
+  const short = t.match(/^(\d{1,2})[/-](\d{1,2})$/);
+  const iso = short
+    ? `${today.slice(0, 4)}-${short[2].padStart(2, "0")}-${short[1].padStart(2, "0")}`
+    : cellDate(t.replace(/^(\d{1,2})-(\d{1,2})-(\d{4})$/, "$1/$2/$3"));
+  // Descarta fechas que no existen (31/02).
+  return iso && toISO(fromISO(iso)) === iso ? iso : null;
 }
 
 /** Número desde una celda: acepta números y textos como "1.200.000" o "$700.000". */
