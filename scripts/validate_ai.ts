@@ -31,10 +31,17 @@ function arg(name: string): string | undefined {
   return value && !value.startsWith("--") ? value.replace(/["\\/]+$/, "") : undefined;
 }
 
+/** Todos los valores de un argumento que se repite (--foto a.jpg --foto b.jpg). */
+function argAll(name: string): string[] {
+  return Deno.args.flatMap((a, i) => a === `--${name}` ? [Deno.args[i + 1]] : [])
+    .filter((v) => v && !v.startsWith("--"))
+    .map((v) => v.replace(/["\\/]+$/, ""));
+}
+
 const invoicesDir = arg("facturas");
 if (!invoicesDir) {
   console.error('Uso: deno task validar-ia --facturas "<carpeta con las 4 facturas PDF>"');
-  console.error('                         [--foto "<foto de una factura impresa>"] [--voz "<nota de voz .ogg>"]');
+  console.error('                         [--foto "<foto de una factura>" ...] [--voz "<nota de voz .ogg>"]');
   Deno.exit(1);
 }
 
@@ -86,8 +93,13 @@ for (const expected of expectedList) {
   }
   pdfs.push({ expected, file: await readInline(path, "application/pdf", "debe ser PDF.") });
 }
-const photoPath = arg("foto");
-const photo = photoPath ? await readInline(photoPath, "image/", "la foto debe ser JPG, PNG, WEBP o HEIC.") : null;
+const photos: { name: string; file: InlineFile }[] = [];
+for (const path of argAll("foto")) {
+  photos.push({
+    name: path.split(/[\\/]/).pop()!,
+    file: await readInline(path, "image/", "la foto debe ser JPG, PNG, WEBP o HEIC."),
+  });
+}
 const voicePath = arg("voz");
 const voice = voicePath
   ? await readInline(voicePath, "audio/", "la nota de voz debe ser .ogg, como la guarda Telegram.")
@@ -158,7 +170,7 @@ async function runModel(model: string): Promise<boolean> {
   for (const { expected, file } of pdfs) {
     if (await showInvoice(`Factura ${expected.numero} (PDF)`, file, model, expected)) passed++;
   }
-  if (photo) await showInvoice("Foto de factura impresa", photo, model);
+  for (const p of photos) await showInvoice(`Foto ${p.name}`, p.file, model);
   console.log(`\n${passed} de ${pdfs.length} facturas PDF exactas con ${model}.`);
   return passed === pdfs.length;
 }
@@ -196,5 +208,5 @@ if (chosen === main) {
 } else {
   console.log("Ningún modelo leyó exactas las 4 facturas. Mándame esta salida.");
 }
-if (!photo) console.log("Faltó la foto de la factura impresa (--foto).");
+if (!photos.length) console.log("Faltó la foto de la factura impresa (--foto).");
 if (!voice) console.log("Faltó la nota de voz (--voz).");

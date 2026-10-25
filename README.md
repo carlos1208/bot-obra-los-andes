@@ -159,14 +159,16 @@ Necesitas la foto de una factura impresa (tomada con el celular) y una nota de v
 Desktop o en <https://web.telegram.org>: clic derecho sobre la nota → Guardar como / Descargar).
 
 ```
-deno task validar-ia --facturas "C:\Users\Carlos\Documents\Documentos personales\Los Andes\05 Facturas y pagos\Facturas" --foto "C:\ruta\factura.jpg" --voz "C:\ruta\nota.ogg"
+deno task validar-ia --facturas "C:\Users\Carlos\Documents\Documentos personales\Los Andes\05 Facturas y pagos\Facturas" --foto "C:\ruta\factura1.jpg" --foto "C:\ruta\factura2.jpg" --voz "C:\ruta\nota.ogg"
 ```
 
-- Lee los capítulos de `Presupuesto` en la hoja y pasa a Gemini las 4 facturas PDF y la foto.
+- Lee los capítulos de `Presupuesto` en la hoja y pasa a Gemini las 4 facturas PDF y las fotos (`--foto` se puede
+  repetir).
 - Compara número, fecha y total con `semillas/facturas_esperadas.csv`. El número se compara sin espacios ni guiones.
 - Si el modelo principal falla en alguna de las 4, repite con el de respaldo y dice cuál quedó.
 - Transcribe y resume la nota de voz (`audio/ogg`) con el modelo que quedó.
-- **Criterio:** número, fecha y total exactos en las 4 facturas PDF. La foto y la nota de voz se revisan a ojo.
+- **Criterio:** número, fecha y total exactos en las 4 facturas PDF. Las fotos que no están en el CSV y la nota de voz
+  se revisan a ojo.
 
 ## Uso diario
 

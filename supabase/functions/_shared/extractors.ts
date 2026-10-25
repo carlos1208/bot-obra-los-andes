@@ -17,8 +17,8 @@ const INVOICE_INSTRUCTIONS =
   `Extraes los datos de una factura de compra colombiana (foto o PDF) para registrar un gasto de obra.
 - Lee solo lo que está impreso. Si un dato no se ve, devuelve null; no lo inventes.
 - number: número de la factura de venta tal como aparece junto a «N°», «No.» o «Factura», con el prefijo pegado y sin espacios (p. ej. «FE 1234» → «FE1234»). No uses el CUFE, la orden de compra, el número interno ni la resolución de la DIAN.
-- date: fecha de expedición o de emisión, en AAAA-MM-DD. No la de vencimiento ni la de validación DIAN.
-- total: el total a pagar, con IVA y redondeo, en pesos enteros. En Colombia el punto separa los miles y la coma los decimales: «1.834.030,00» es 1834030.
+- date: fecha de expedición o de emisión, en AAAA-MM-DD. En Colombia las fechas van día/mes/año: «03/11/2026» es 2026-11-03. No uses la de vencimiento ni la de validación DIAN.
+- total: el total a pagar, con IVA y redondeo, en pesos enteros. No es el efectivo recibido, el cambio ni el ahorro. Los pesos no llevan centavos: un punto o una coma seguidos de tres dígitos separan miles, y «,00» o «.00» al final son centavos en cero. «2.450.900,00», «$45.300» y «87,650» son 2450900, 45300 y 87650.
 - supplier: nombre comercial corto de la tienda, el que usa la gente; si no aparece, la razón social.
 - tax_id: NIT del vendedor como aparece (p. ej. 800.242.106-2). No el documento del cliente.
 - items: lo comprado, en frases cortas y claras en español (p. ej. «Lavamanos ovalado blanco»), sin códigos ni precios.
