@@ -12,7 +12,18 @@ import { columnLetter, sheetsFetch, toCell } from "../supabase/functions/_shared
 await loadEnv();
 for (const n of ["SHEET_ID", "GOOGLE_SA_EMAIL", "GOOGLE_SA_PRIVATE_KEY"]) required(n);
 
-const TABS = ["Tareas", "Hitos", "Esperado", "Objetivos", "Reportes", "Gastos", "Pagos", "Presupuesto", "Config"];
+const TABS = [
+  "Tareas",
+  "Hitos",
+  "Esperado",
+  "Objetivos",
+  "Reportes",
+  "Notas",
+  "Gastos",
+  "Pagos",
+  "Presupuesto",
+  "Config",
+];
 const MONEY_COLUMNS = new Set([
   "valor",
   "descuento",

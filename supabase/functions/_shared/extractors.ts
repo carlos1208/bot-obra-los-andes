@@ -144,17 +144,43 @@ export interface FreeReport {
   tomorrow_detail: string | null;
 }
 
-const REPORT_INSTRUCTIONS =
-  `Conviertes el reporte diario de una obra (texto o nota de voz, en español de Colombia) en datos.
-Usa solo lo que dice el reporte: lo que no menciona queda vacío o null. No inventes.
-- tasks: tareas de la lista que se trabajaron hoy. status «terminada» si dice que se terminó o quedó lista; «avanzó» si se trabajó sin terminar.
-- expected: de lo esperado hoy, lo que el reporte dice que llegó (arrived true) o que no llegó (arrived false).
+/** Dos notas que se contradicen: una pregunta corta con las versiones posibles. */
+export interface Conflict {
+  question: string;
+  options: string[];
+}
+
+export interface DayReport extends FreeReport {
+  conflicts: Conflict[];
+}
+
+/** Nota del día como se guarda en la pestaña Notas. */
+export interface DayNote {
+  hora: string;
+  quien: string;
+  tipo: string;
+  texto: string;
+}
+
+const DAY_REPORT_INSTRUCTIONS =
+  `Combinas en un solo reporte diario todas las notas del día de una obra (texto o transcripciones de notas de voz, en español de Colombia), en orden de hora. Si hay un reporte anterior, es la base y las notas lo actualizan.
+Usa solo lo que dicen las notas y el reporte anterior: lo que nadie menciona queda vacío o null. No inventes.
+- Si una nota posterior corrige a una anterior (dice que corrige, aclara o que algo cambió), vale la más reciente.
+- Las notas de tipo «aclaración» resuelven las incongruencias: vale la aclaración.
+- conflicts: solo cuando dos notas se contradicen sin que la posterior diga que corrige. Una pregunta corta y de 2 a 4 opciones cortas con las versiones. Si no hay, lista vacía. En los campos, deja la versión más reciente.
+- tasks: tareas de la lista que se trabajaron hoy. status «terminada» si se terminó o quedó lista; «avanzó» si se trabajó sin terminar.
+- expected: de lo esperado hoy, lo que llegó (arrived true) o no llegó (arrived false).
 - water: la opción que mejor describe la novedad del agua con Triple A. water_detail: el detalle (por ejemplo la fecha) o null.
 - news: las novedades que aplican. news_detail: resumen corto de las novedades, o null.
-- tomorrow: lo que se necesita mañana, de la lista. tomorrow_detail: lo que pida y no esté en la lista, o null.`;
+- tomorrow: lo que se necesita mañana, de la lista. tomorrow_detail: lo que pidan y no esté en la lista, o null.`;
 
-/** Reporte en texto libre o nota de voz → la misma estructura del reporte con botones. */
-export function extractReport(input: InlineFile | string, options: ReportOptions, model?: string): Promise<FreeReport> {
+/** Arma el reporte del día con todas las notas (y el reporte anterior, si hay). */
+export function extractDayReport(
+  notes: DayNote[],
+  previous: string[],
+  options: ReportOptions,
+  model?: string,
+): Promise<DayReport> {
   const context = [
     "Tareas de la semana:",
     ...options.tasks.map((t) => `- ${t.id}: ${t.label}`),
@@ -191,15 +217,35 @@ export function extractReport(input: InlineFile | string, options: ReportOptions
       news_detail: { type: ["string", "null"] },
       tomorrow: { type: "array", items: oneOf(options.tomorrow.map((t) => t.id), "Lo que se necesita mañana") },
       tomorrow_detail: { type: ["string", "null"] },
+      conflicts: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            question: { type: "string", description: "Pregunta corta sobre la contradicción" },
+            options: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 4 },
+          },
+          required: ["question", "options"],
+        },
+      },
     },
-    required: ["tasks", "expected", "water", "water_detail", "news", "news_detail", "tomorrow", "tomorrow_detail"],
+    required: [
+      "tasks",
+      "expected",
+      "water",
+      "water_detail",
+      "news",
+      "news_detail",
+      "tomorrow",
+      "tomorrow_detail",
+      "conflicts",
+    ],
   };
-  return generateJson<FreeReport>({
-    instructions: REPORT_INSTRUCTIONS,
-    parts: typeof input === "string"
-      ? [context, `Reporte:\n${input}`]
-      : [context, "Reporte en esta nota de voz:", input],
-    schema,
-    model,
-  });
+  const parts = [
+    context,
+    ...previous.map((p) => `Reporte anterior:\n${p}`),
+    "Notas de hoy:",
+    ...notes.map((n, i) => `${i + 1}. [${n.hora}, ${n.quien}, ${n.tipo}] ${n.texto}`),
+  ];
+  return generateJson<DayReport>({ instructions: DAY_REPORT_INSTRUCTIONS, parts, schema, model });
 }

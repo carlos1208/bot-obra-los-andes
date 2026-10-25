@@ -55,7 +55,18 @@ export interface FakeFile {
 export const drive: FakeFile[] = [];
 export const sent: { method: string; params: Record<string, unknown> }[] = [];
 export const sheet: Record<string, unknown[][]> = {};
-const TABS = ["Config", "Tareas", "Hitos", "Esperado", "Objetivos", "Reportes", "Gastos", "Pagos", "Presupuesto"];
+const TABS = [
+  "Config",
+  "Tareas",
+  "Hitos",
+  "Esperado",
+  "Objetivos",
+  "Reportes",
+  "Notas",
+  "Gastos",
+  "Pagos",
+  "Presupuesto",
+];
 export async function resetSheet(): Promise<void> {
   for (const t of TABS) sheet[t] = parse(await Deno.readTextFile(new URL(`../semillas/${t}.csv`, import.meta.url)));
 }

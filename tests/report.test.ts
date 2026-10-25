@@ -1,5 +1,6 @@
 // Reporte diario de punta a punta: secciones con selección múltiple, «Agregar compra» y vuelta al reporte,
-// «No llegó» avisado en el momento, «Otro» por voz, corregir sección, guardar, y reporte en texto libre.
+// «No llegó» avisado en el momento, «Otro» por voz, corregir sección, guardar; y reporte con las notas del día
+// (varias notas, incongruencias, uno por día).
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 import {
   BROTHER,
@@ -133,42 +134,139 @@ Deno.test("reporte completo con botones, una compra en medio y guardado", async 
   assertEquals((tables.sesiones ?? []).length, 0);
 });
 
-Deno.test("reporte en texto libre: pregunta, Gemini lo estructura y se corrige una sección", async () => {
+/** Respuesta de Gemini al armar el reporte del día (lo que no se pasa queda vacío). */
+const day = (over: Record<string, unknown> = {}) => ({
+  tasks: [],
+  expected: [],
+  water: null,
+  water_detail: null,
+  news: [],
+  news_detail: null,
+  tomorrow: [],
+  tomorrow_detail: null,
+  conflicts: [],
+  ...over,
+});
+const dayCalls = () =>
+  gemini.calls.filter((c) => "conflicts" in c.body.generationConfig.responseFormat.text.schema.properties);
+const promptOf = (call: { body: any }) =>
+  call.body.contents[0].parts.map((p: { text?: string }) => p.text ?? "").join("\n");
+
+Deno.test("notas del día: cada nota rearma un solo reporte y guardar otra vez actualiza la misma fila", async () => {
   await resetSheet();
   clearSent();
-  await processUpdate(say(BROTHER, { text: "hola" }));
-  assertEquals(lastText(), "¿Es el reporte de hoy?");
-  await processUpdate(press(BROTHER, "rep:lib:0"));
-  assertEquals(lastText(), "Listo, no lo tomo como reporte.");
-
-  await processUpdate(say(BROTHER, { text: "Hoy quedó instalada la viga y llegó. Mañana Carlos decide la ventana." }));
-  gemini.replies.push({
-    tasks: [{ id: "03", status: "terminada" }, { id: "99", status: "avanzó" }], // 99 no existe: se ignora
-    expected: [{ item: "Viga instalada y puntales retirados", arrived: true }],
-    water: null,
-    water_detail: null,
-    news: ["Sin novedad"],
-    news_detail: null,
-    tomorrow: ["d"],
-    tomorrow_detail: "Definir la ventana",
-  });
-  await processUpdate(press(BROTHER, "rep:lib:1"));
-  const schema = gemini.calls.at(-1)!.body.generationConfig.responseFormat.text.schema;
-  assertEquals(schema.properties.tasks.items.properties.id.enum.length, 10);
+  gemini.replies.push(
+    { transcript: "Hoy quedó instalada la viga y llegó bien", summary: "Viga instalada." },
+    day({
+      tasks: [{ id: "03", status: "terminada" }],
+      expected: [{ item: "Viga instalada y puntales retirados", arrived: true }],
+    }),
+  );
+  await processUpdate(say(BROTHER, voice("n1")));
+  const [n1] = rowsOf("Notas");
+  assertEquals([n1.fecha, n1.hora, n1.reportado_por, n1.tipo], ["2026-10-28", "17:00", "Hermano", "voz"]);
+  assertEquals([n1.transcripcion, n1.resumen], ["Hoy quedó instalada la viga y llegó bien", "Viga instalada."]);
+  assertStringIncludes(lastText(), "Armado con 1 nota de hoy.");
   assertStringIncludes(lastText(), "Se hizo hoy: 03 terminada");
-  assertStringIncludes(lastText(), "¿Llegó lo esperado hoy?: sí");
-  assertStringIncludes(lastText(), "Agua (Triple A): sin dato");
-  assertStringIncludes(lastText(), "Para mañana se necesita: Decisión de Carlos, Definir la ventana");
+  assertStringIncludes(lastText(), "¿Lo guardo?");
+  assertStringIncludes(
+    promptOf(dayCalls().at(-1)!),
+    "1. [17:00, Hermano, voz] Hoy quedó instalada la viga y llegó bien",
+  );
 
-  await processUpdate(press(BROTHER, "rep:fix"));
-  await processUpdate(press(BROTHER, "rep:fx:agua"));
-  await processUpdate(press(BROTHER, "rep:w:0"));
-  assertStringIncludes(lastText(), "Agua (Triple A): Sin novedad"); // vuelve directo a la vista previa
+  // Segunda nota (texto corto: no gasta Gemini en resumirla). El reporte se arma con las dos.
+  gemini.replies.push(
+    day({
+      tasks: [{ id: "03", status: "terminada" }],
+      expected: [{ item: "Viga instalada y puntales retirados", arrived: true }],
+      tomorrow: ["d"],
+      tomorrow_detail: "Definir la ventana",
+    }),
+  );
+  await processUpdate(say(BROTHER, { text: "Mañana Carlos tiene que decidir la ventana" }));
+  assertEquals(rowsOf("Notas").length, 2);
+  assertStringIncludes(
+    promptOf(dayCalls().at(-1)!),
+    "2. [17:00, Hermano, texto] Mañana Carlos tiene que decidir la ventana",
+  );
+  assertStringIncludes(lastText(), "Armado con 2 notas de hoy.");
+  assertStringIncludes(lastText(), "Para mañana se necesita: Decisión de Carlos, Definir la ventana");
+  assertEquals(rowsOf("Reportes").length, 0); // el reporte se escribe solo con «Sí, guardar»
 
   await processUpdate(press(BROTHER, "rep:ok"));
   assertEquals(rowsOf("Reportes").length, 1);
-  assertEquals(task("03").estado, "terminada");
-  assertEquals(beam().llego, "sí");
+  assertEquals([task("03").estado, beam().llego], ["terminada", "sí"]);
+  assertStringIncludes(lastTo(CARLOS), "Tu hermano guardó el reporte:");
+
+  // Tercera nota que corrige: la 03 (ya terminada en la hoja) sigue en la lista porque está en el reporte de hoy.
+  gemini.replies.push(
+    day({
+      tasks: [{ id: "03", status: "avanzó" }],
+      expected: [{ item: "Viga instalada y puntales retirados", arrived: false }],
+    }),
+  );
+  await processUpdate(say(BROTHER, { text: "Corrijo: la viga no llegó, la traen mañana" }));
+  const third = dayCalls().at(-1)!;
+  assert(
+    third.body.generationConfig.responseFormat.text.schema.properties.tasks.items.properties.id.enum.includes("03"),
+  );
+  assertStringIncludes(promptOf(third), "Reporte anterior:\nREPORTE – mié 28 oct");
+  assertStringIncludes(lastText(), "Ya hay un reporte de hoy. ¿Lo actualizo con este?");
+
+  await processUpdate(press(BROTHER, "rep:ok"));
+  const reports = rowsOf("Reportes");
+  assertEquals(reports.length, 1); // uno por día: se actualizó
+  assertEquals([reports[0].tareas_terminadas, reports[0].tareas_avanzadas], ["", "03"]);
+  assertEquals([task("03").estado, beam().llego], ["en curso", "no"]); // la terminó hoy, la corrección la reabre
+  assert(sent.some((e) => e.params.chat_id === CARLOS && String(e.params.text).startsWith("⚠️ Hoy no llegó: Viga")));
+  assertStringIncludes(lastTo(CARLOS), "Tu hermano actualizó el reporte:");
+});
+
+Deno.test("incongruencia entre notas: pregunta con botones y la respuesta queda como aclaración", async () => {
+  await resetSheet();
+  clearSent();
+  gemini.replies.push(day({ expected: [{ item: "Viga instalada y puntales retirados", arrived: true }] }));
+  await processUpdate(say(BROTHER, { text: "Ya llegó la viga" }));
+  const conflict = { question: "¿Llegó hoy la viga?", options: ["Sí, llegó", "No ha llegado"] };
+  gemini.replies.push(
+    day({ expected: [{ item: "Viga instalada y puntales retirados", arrived: false }], conflicts: [conflict] }),
+  );
+  await processUpdate(say(BROTHER, { text: "La viga todavía no ha llegado" }));
+  assertStringIncludes(lastText(), "Las notas no coinciden (1 de 1)");
+  assertStringIncludes(lastText(), "¿Llegó hoy la viga?");
+  assertEquals(buttons().map((b) => b.split("|")[1]), ["rep:k:0:0", "rep:k:0:1", "rep:k:0:n"]);
+
+  // Gemini vuelve a ver la misma pregunta: como ya se respondió, no se repite.
+  gemini.replies.push(
+    day({ expected: [{ item: "Viga instalada y puntales retirados", arrived: false }], conflicts: [conflict] }),
+  );
+  await processUpdate(press(BROTHER, "rep:k:0:1"));
+  const note = rowsOf("Notas").at(-1)!;
+  assertEquals([note.tipo, note.transcripcion], ["aclaración", "Aclaración: ¿Llegó hoy la viga? → No ha llegado"]);
+  assertStringIncludes(promptOf(dayCalls().at(-1)!), "aclaración] Aclaración: ¿Llegó hoy la viga? → No ha llegado");
+  assertStringIncludes(lastText(), "¿Llegó lo esperado hoy?: no: Viga instalada y puntales retirados");
+  assert(!lastText().includes("Revisa"));
+
+  // Otra incongruencia, ahora aclarada con una nota nueva.
+  gemini.replies.push(day({ conflicts: [{ question: "¿Vino el albañil?", options: ["Sí", "No"] }] }));
+  await processUpdate(say(BROTHER, { text: "El albañil no vino" }));
+  await processUpdate(press(BROTHER, "rep:k:0:n"));
+  assertStringIncludes(lastText(), "Manda una nota con la aclaración.");
+  gemini.replies.push(day({ news: ["El albañil no vino"] }));
+  await processUpdate(say(BROTHER, { text: "Aclaro: el albañil no vino hoy" }));
+  assertStringIncludes(lastText(), "Novedades: El albañil no vino");
+  assertEquals(rowsOf("Notas").length, 5);
+});
+
+Deno.test("Gemini sin cuota al armar el reporte: la nota no se guarda dos veces", async () => {
+  await resetSheet();
+  clearSent();
+  gemini.replies.push({ status: 429 }, day({ news: ["Sin novedad"] }));
+  await processUpdate(say(BROTHER, { text: "Hoy sin novedad" }));
+  assertEquals(rowsOf("Notas").length, 1);
+  assert(sent.some((e) => e.params.text === "Lo proceso en unos minutos."));
+  assertStringIncludes(lastText(), "Novedades: Sin novedad");
+  await processUpdate(press(BROTHER, "rep:x"));
 });
 
 Deno.test("Carlos también puede reportar en su privado (para probar sin el hermano)", async () => {
@@ -220,5 +318,6 @@ Deno.test("la factura de «Agregar compra» puede llegar por el tema Gastos y vu
   clearSent();
   await processUpdate(press(BROTHER, "rep:x"));
   await processUpdate(say(BROTHER, { text: "/pago" }));
-  assert(!sent.some((e) => e.params.text === "¿Es el reporte de hoy?"));
+  assert(!sent.some((e) => String(e.params.text).startsWith("Nota anotada")));
+  assertEquals(rowsOf("Notas").length, 0);
 });

@@ -19,7 +19,7 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 | ---------------------- | --------------------------------------------------------------------------------------------------------------- | ------------- |
 | 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista         |
 | 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista         |
-| 3. MVP                 | Enrutador, reporte diario con selección múltiple, gastos con caja menor y cola de reintentos                    | **En prueba** |
+| 3. MVP                 | Enrutador, reporte diario (botones o notas del día), gastos con caja menor y cola de reintentos                 | **En prueba** |
 | 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre»                                         | Pendiente     |
 | 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Pendiente     |
 | 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Pendiente     |
@@ -172,9 +172,10 @@ deno task validar-ia --facturas "C:\Users\Carlos\Documents\Documentos personales
 
 ### Prueba de la fase 3
 
-Antes: `git pull`, `deno task test`, `npx supabase functions deploy telegram --use-api` y `deno task webhook` (registra
-`/reporte` y `/gasto` en el menú). Mientras tu hermano no esté, haz todo tú: el bot te deja reportar y registrar
-compras. Prueba desde el lun 26 oct: antes no hay tareas en la semana.
+Antes: `git pull`, `deno task test`, `deno task crear-hoja` (agrega la pestaña `Notas`; no toca las que tienen datos),
+`npx supabase functions deploy telegram --use-api` y `deno task webhook` (registra `/reporte` y `/gasto` en el menú).
+Mientras tu hermano no esté, haz todo tú: el bot te deja reportar y registrar compras. Prueba desde el lun 26 oct: antes
+no hay tareas en la semana.
 
 - **Reporte completo** en el tema Reportes con `/reporte`:
   1. Marca dos tareas → «Listo» → una «Terminada» y otra «Avanzó».
@@ -188,9 +189,12 @@ compras. Prueba desde el lun 26 oct: antes no hay tareas en la semana.
   campo» en algo → «Sí, guardar». Revisa la fila en `Gastos`, la foto en Drive `Facturas/` y el saldo de la caja.
 - **Compra por encima del tope:** factura de más de $100.000 con «Caja menor» → debe pasar a «Pagó Carlos» y avisarte
   por privado.
+- **Reporte por notas** en el tema Reportes: manda 2 o 3 notas de voz o textos. Cada una queda en la pestaña `Notas` y
+  el bot rearma un solo reporte con todas. Haz que dos notas se contradigan: debe preguntar con botones antes de la
+  vista previa. Guarda, manda otra nota y guarda otra vez: en `Reportes` sigue habiendo una sola fila de hoy,
+  actualizada.
 - La sección «Fotos» del reporte sale con «—» hasta la fase 4.
-- **Opcional:** reporte en texto libre o nota de voz en el tema Reportes, un PDF de factura por tu privado y una compra
-  sin factura (máximo $10.000 y una por día).
+- **Opcional:** un PDF de factura por tu privado y una compra sin factura (máximo $10.000 y una por día).
 
 ## Uso diario
 
@@ -230,5 +234,6 @@ Si cambias una semilla allá, cópiala aquí y vuelve a cargarla con `deno task 
 - `fotos_antes.json`: catálogo F01–F24 con encuadre, tareas e hitos.
 - `Gastos.csv` y `Pagos.csv`: lo pagado antes de la obra, con `cuenta_12M = no`.
 - `facturas_esperadas.csv`: los valores de las 4 facturas reales para la fase 2.
+- `Notas.csv`: solo encabezados. Cada texto o nota de voz del tema Reportes queda ahí con su transcripción y resumen.
 
 El mapa de la carpeta del Drive está en `CLAUDE.md`.

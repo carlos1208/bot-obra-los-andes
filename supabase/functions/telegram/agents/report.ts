@@ -1,11 +1,21 @@
-// Reporte diario por secciones, con selección múltiple (sección 6.2 del prompt). También acepta el
-// reporte en texto libre o nota de voz: Gemini lo pasa a la misma estructura.
-// Nada se escribe en la hoja hasta «Sí, guardar». Al guardar: fila en Reportes, estado en Tareas,
-// llegó en Esperado y el resumen a Carlos por privado.
+// Reporte diario (sección 6.2 del prompt), de dos formas:
+// - Con botones (/reporte): por secciones, con selección múltiple.
+// - Con notas: cada texto o nota de voz del tema Reportes se guarda en la pestaña Notas (transcripción y
+//   resumen) y el bot rearma un solo reporte con todas las notas del día. Si se contradicen, pregunta.
+// El reporte se escribe solo con «Sí, guardar» y hay uno por día: guardarlo otra vez actualiza su fila.
+// Las notas se guardan sin confirmar (lo pidió Carlos): son la entrada del reporte, no el reporte.
+// Al guardar: fila en Reportes, estado en Tareas, llegó en Esperado y el resumen a Carlos por privado.
 
 import { claimStep, deleteSession, readSession, saveSession, type Session } from "../../_shared/db.ts";
 import { envNumber } from "../../_shared/env.ts";
-import { extractReport, type ReportOptions, summarizeNote } from "../../_shared/extractors.ts";
+import {
+  type Conflict,
+  type DayNote,
+  extractDayReport,
+  type FreeReport,
+  type ReportOptions,
+  summarizeNote,
+} from "../../_shared/extractors.ts";
 import {
   bogotaTime,
   cellDate,
@@ -59,6 +69,10 @@ const DECISION = { id: "d", label: "Decisión de Carlos" };
 const OTHER_OPTION = { id: "o", label: "Otro" };
 /** Texto o nota de voz más corto que esto se guarda tal cual; si es más largo, Gemini lo resume. */
 const SHORT_NOTE = 150;
+/** Pestaña de las notas del día. */
+const NOTES = "Notas";
+/** Rondas de aclaraciones antes de dejar las incongruencias como aviso en la vista previa. */
+const MAX_ROUNDS = 2;
 
 type Status = "terminada" | "avanzó";
 
@@ -89,8 +103,19 @@ interface Data extends FlowBase {
   tomorrowDetail: string;
   /** Corrigiendo una sección: al terminarla vuelve a la vista previa. */
   fixing?: boolean;
-  /** Reporte libre por confirmar. */
-  pending?: { text?: string; voice?: string };
+  /** Armado con las notas del día: cuántas (sin contar las aclaraciones). */
+  notes?: number;
+  /** Incongruencias por resolver y las respuestas dadas. */
+  conflicts?: Conflict[];
+  answers?: string[];
+  /** Preguntas ya respondidas: no se vuelven a hacer. */
+  answered?: string[];
+  /** Veces que se rearmó por aclaraciones. */
+  rounds?: number;
+  /** Incongruencias que quedaron sin resolver: se muestran en la vista previa. */
+  warnings?: string[];
+  /** Lo que encontró Gemini en la última armada (de paso, no se guarda). */
+  conflictsFound?: Conflict[];
 }
 
 // --- Sesión y mensajes ---------------------------------------------------------
@@ -110,16 +135,30 @@ async function closeSection(ctx: Context, messageId: number, summary: string): P
   await editMessageText(ctx.chatId, messageId, summary);
 }
 
+/** Fila de hoy en Reportes (hay una por día). */
+function todayReport(rows: Row[], date: string): Row | undefined {
+  return rows.filter((r) => cellDate(r.fecha) === date).at(-1);
+}
+
+const idList = (v: unknown) => String(v ?? "").split(/[,;\s]+/).filter(Boolean);
+
 async function baseData(ctx: Context): Promise<Data> {
   const date = todayISO();
-  const { Config, Tareas, Esperado } = await readTabs(["Config", "Tareas", "Esperado"]);
+  const { Config, Tareas, Esperado, Reportes } = await readTabs(["Config", "Tareas", "Esperado", "Reportes"]);
   const cfg = readConfig(Config);
   const tasks = readTasks(Tareas);
   const option = (t: { id: string; tarea: string }) => ({ id: t.id, label: t.tarea });
+  // Las tareas abiertas de la semana, más las del reporte ya guardado hoy (pueden estar terminadas).
+  const saved = todayReport(Reportes, date);
+  const listed = new Set([
+    ...tasksForWeek(tasks, date).map((t) => t.id),
+    ...idList(saved?.tareas_terminadas),
+    ...idList(saved?.tareas_avanzadas),
+  ]);
   return {
     hilo: ctx.threadId ?? null,
     date,
-    tasks: tasksForWeek(tasks, date).map(option),
+    tasks: tasks.filter((t) => listed.has(t.id)).map(option),
     done: [],
     status: {},
     expected: Esperado.filter((r) => cellDate(r.fecha) === date).map((r) => ({ label: String(r.quien_o_que) })),
@@ -150,12 +189,13 @@ const taskLabel = (data: Data, id: string) => data.tasks.find((t) => t.id === id
 
 /** Lo que se lee de la hoja en este momento para las secciones automáticas y la vista previa. */
 async function sheetFacts(data: Data) {
-  const { Config, Tareas, Gastos, Pagos, Objetivos } = await readTabs([
+  const { Config, Tareas, Gastos, Pagos, Objetivos, Reportes } = await readTabs([
     "Config",
     "Tareas",
     "Gastos",
     "Pagos",
     "Objetivos",
+    "Reportes",
   ]);
   const cfg = readConfig(Config);
   const finishedNow = data.done.filter((id) => data.status[id] === "terminada");
@@ -168,6 +208,7 @@ async function sheetFacts(data: Data) {
       .filter((r: Row) => cellDate(r.fecha) === data.date)
       .map((r) => `${short(String(r.items ?? ""), 40)} en ${r.proveedor || "—"}, ${formatPesos(cellNumber(r.valor))}`),
     balance: pettyCashBalance(cfg, Gastos, Pagos),
+    savedToday: Boolean(todayReport(Reportes, data.date)),
   };
 }
 
@@ -255,10 +296,16 @@ async function showStep(ctx: Context, data: Data, step: string, editId?: number)
     case "manana_otro":
       text = "Para mañana: escribe o manda una nota de voz con lo que se necesita.";
       break;
-    case "libre":
-      text = "¿Es el reporte de hoy?";
-      keyboard = [[button("Sí, es el reporte", "rep:lib:1"), button("No", "rep:lib:0")]];
+    case "incongruencia": {
+      const i = data.answers?.length ?? 0;
+      const c = data.conflicts![i];
+      text = `<b>Las notas no coinciden (${i + 1} de ${data.conflicts!.length})</b>\n${escapeHtml(c.question)}`;
+      keyboard = [
+        ...c.options.map((o, j) => [button(short(o), `rep:k:${i}:${j}`)]),
+        [button("Mando otra nota", `rep:k:${i}:n`)],
+      ];
       break;
+    }
     default:
       return await showPreview(ctx, data, editId);
   }
@@ -361,7 +408,10 @@ function fixKeyboard(data: Data): Keyboard {
 
 async function showPreview(ctx: Context, data: Data, editId?: number): Promise<void> {
   const f = await sheetFacts(data);
-  const text = `${escapeHtml(reportText(data, f))}\n\n¿Lo guardo?`;
+  const header = data.notes ? `Armado con ${data.notes} nota${data.notes > 1 ? "s" : ""} de hoy.\n\n` : "";
+  const warnings = (data.warnings ?? []).map((w) => `\n⚠️ Revisa: ${escapeHtml(w)}`).join("");
+  const question = f.savedToday ? "Ya hay un reporte de hoy. ¿Lo actualizo con este?" : "¿Lo guardo?";
+  const text = `${header}${escapeHtml(reportText(data, f))}${warnings ? `\n${warnings}` : ""}\n\n${question}`;
   let msg = editId;
   if (editId) await editMessageText(ctx.chatId, editId, text, PREVIEW_KEYBOARD);
   else msg = await say(ctx, data, text, PREVIEW_KEYBOARD);
@@ -497,14 +547,8 @@ export async function onButton(ctx: Context): Promise<void> {
         value === "hecho" && !data.tasks.length ? "compras" : value,
       );
     }
-    case "libre/lib":
-      await answerCallback(cb.id);
-      if (value !== "1") {
-        await deleteSession(ctx.chatId, ctx.userId);
-        await editMessageText(ctx.chatId, messageId, "Listo, no lo tomo como reporte.");
-        return;
-      }
-      return await readFreeReport(ctx, data, messageId);
+    case "incongruencia/k":
+      return await answerConflict(ctx, data, Number(value), extra, messageId);
   }
   await answerCallback(cb.id, "Ese botón ya no está activo.");
 }
@@ -548,32 +592,97 @@ export async function resume(ctx: Context, session: Session<Data>): Promise<void
     await say(ctx, data, `Anotado: ${escapeHtml(note)}`);
     return await showStep(ctx, data, nextStep(data, step));
   }
+  // Con la vista previa o una pregunta abierta, el texto o la voz es una nota más del día.
+  if (step === "vista" || step === "incongruencia") return await receiveNote(ctx, session);
   await ctx.reply("Toca los botones de arriba, o escribe /reporte para empezar de nuevo.");
 }
 
-/** Texto o voz en el tema Reportes sin un reporte abierto: pregunta antes de tomarlo como reporte. */
-export async function offerFreeReport(ctx: Context): Promise<void> {
-  const m = ctx.message!;
-  const pending = m.voice ? { voice: m.voice.file_id } : { text: m.text?.trim() ?? "" };
-  if (!pending.voice && !pending.text) return;
-  const data = { ...(await baseData(ctx)), pending };
-  await showStep(ctx, data, "libre");
+// --- Notas del día --------------------------------------------------------------
+
+async function noteExists(key: string): Promise<boolean> {
+  const { Notas } = await readTabs([NOTES]);
+  return Notas.some((r) => String(r.mensaje_id) === key);
 }
 
-async function readFreeReport(ctx: Context, data: Data, messageId: number): Promise<void> {
-  await editMessageText(ctx.chatId, messageId, "Leyendo el reporte…");
-  const options: ReportOptions = {
-    tasks: data.tasks,
-    expected: data.expected.map((e) => e.label),
-    water: WATER,
-    news: NEWS,
-    tomorrow: data.tomorrowOptions.filter((o) => o.id !== OTHER_OPTION.id),
-  };
-  const input = data.pending?.voice
-    ? { mimeType: "audio/ogg", bytes: (await downloadFile(data.pending.voice)).bytes }
-    : data.pending?.text ?? "";
-  const got = await extractReport(input, options);
+async function recordNote(
+  ctx: Context,
+  date: string,
+  kind: string,
+  transcript: string,
+  summary: string,
+  key: string,
+): Promise<void> {
+  await appendRow(NOTES, {
+    fecha: date,
+    hora: bogotaTime(),
+    reportado_por: roleLabel(ctx),
+    tipo: kind,
+    transcripcion: transcript,
+    resumen: summary,
+    mensaje_id: key,
+  });
+}
 
+/** Texto o nota de voz en el tema Reportes: va a Notas y se rearma el reporte del día. */
+export async function receiveNote(ctx: Context, session?: Session<Data> | null): Promise<void> {
+  const m = ctx.message!;
+  const text = m.text?.trim() ?? "";
+  if (!m.voice && !text) return;
+  const key = String(m.message_id);
+  // En un reintento (Gemini sin cuota) la nota ya puede estar guardada.
+  if (!(await noteExists(key))) {
+    let transcript = text;
+    let summary = text;
+    if (m.voice) {
+      const { bytes } = await downloadFile(m.voice.file_id);
+      ({ transcript, summary } = await summarizeNote({ mimeType: m.voice.mime_type ?? "audio/ogg", bytes }));
+    } else if (text.length > SHORT_NOTE) {
+      summary = (await summarizeNote(text)).summary;
+    }
+    await recordNote(ctx, todayISO(), m.voice ? "voz" : "texto", transcript, summary, key);
+  }
+  const wait = await ctx.reply("Nota anotada. Armando el reporte del día…");
+  await buildFromNotes(ctx, wait.message_id, session?.datos, 0);
+}
+
+const reportOptions = (data: Data): ReportOptions => ({
+  tasks: data.tasks,
+  expected: data.expected.map((e) => e.label),
+  water: WATER,
+  news: NEWS,
+  tomorrow: data.tomorrowOptions.filter((o) => o.id !== OTHER_OPTION.id),
+});
+
+/** Arma el reporte con todas las notas de hoy y el reporte guardado (o el borrador con botones). */
+async function buildFromNotes(ctx: Context, editId: number, old: Data | undefined, rounds: number): Promise<void> {
+  const data = await baseData(ctx);
+  const { Notas, Reportes } = await readTabs([NOTES, "Reportes"]);
+  const notes: DayNote[] = Notas.filter((r) => cellDate(r.fecha) === data.date).map((r) => ({
+    hora: String(r.hora ?? ""),
+    quien: String(r.reportado_por ?? ""),
+    tipo: String(r.tipo ?? ""),
+    texto: String(r.transcripcion ?? ""),
+  }));
+  const previous: string[] = [];
+  const saved = todayReport(Reportes, data.date);
+  if (saved?.texto_reporte) previous.push(String(saved.texto_reporte));
+  if (old && !old.notes) previous.push(reportText(old, await sheetFacts(old))); // borrador con botones
+
+  applyReport(data, await extractDayReport(notes, previous, reportOptions(data)));
+  data.notes = notes.filter((n) => normalize(n.tipo) !== "aclaracion").length;
+  data.answered = old?.answered ?? [];
+  data.rounds = rounds;
+  const open = data.conflictsFound!.filter((c) => !data.answered!.includes(normalize(c.question)));
+  delete data.conflictsFound;
+  if (open.length && rounds < MAX_ROUNDS) {
+    await showStep(ctx, { ...data, conflicts: open, answers: [] }, "incongruencia", editId);
+    return;
+  }
+  await showPreview(ctx, { ...data, warnings: open.map((c) => c.question) }, editId);
+}
+
+/** Pasa lo que armó Gemini a los datos del reporte (descarta lo que no está en las listas). */
+function applyReport(data: Data, got: FreeReport & { conflicts: Conflict[] }): void {
   const validTask = new Set(data.tasks.map((t) => t.id));
   for (const t of got.tasks) {
     if (!validTask.has(t.id) || data.done.includes(t.id)) continue;
@@ -592,8 +701,45 @@ async function readFreeReport(ctx: Context, data: Data, messageId: number): Prom
   data.tomorrow = got.tomorrow.filter((id) => validTomorrow.has(id));
   data.tomorrowDetail = got.tomorrow_detail ?? "";
   if (data.tomorrowDetail && !data.tomorrow.includes(OTHER_OPTION.id)) data.tomorrow.push(OTHER_OPTION.id);
-  data.pending = undefined;
-  await showPreview(ctx, data, messageId);
+  data.conflictsFound = got.conflicts.filter((c) => c.question && c.options.length >= 2);
+}
+
+/** Botón de una incongruencia: una versión, o «Mando otra nota». */
+async function answerConflict(
+  ctx: Context,
+  data: Data,
+  index: number,
+  choice: string,
+  messageId: number,
+): Promise<void> {
+  const cb = ctx.callback!;
+  const answers = data.answers ?? [];
+  const c = data.conflicts?.[index];
+  const option = choice === "n" ? "" : c?.options[Number(choice)];
+  if (!c || index !== answers.length || option === undefined) {
+    await answerCallback(cb.id, "Ese botón ya no está activo.");
+    return;
+  }
+  await answerCallback(cb.id);
+  if (option) {
+    answers.push(`${c.question} → ${option}`);
+    data.answered = [...(data.answered ?? []), normalize(c.question)];
+    await closeSection(ctx, messageId, `${escapeHtml(c.question)}\n✅ ${escapeHtml(option)}`);
+  }
+  // Las respuestas quedan en Notas como aclaración: así cuentan cada vez que se rearma el reporte.
+  const key = `a${messageId}`;
+  if (answers.length && (!option || answers.length === data.conflicts!.length) && !(await noteExists(key))) {
+    const text = `Aclaración: ${answers.join("; ")}`;
+    await recordNote(ctx, data.date, "aclaración", text, text, key);
+  }
+  if (!option) {
+    await closeSection(ctx, messageId, `${escapeHtml(c.question)}\nManda una nota con la aclaración.`);
+    await save(ctx, "incongruencia", { ...data, answers, msg: undefined });
+    return;
+  }
+  if (answers.length < data.conflicts!.length) return await showStep(ctx, { ...data, answers }, "incongruencia");
+  const wait = await say(ctx, data, "Armando el reporte con la aclaración…");
+  await buildFromNotes(ctx, wait, data, (data.rounds ?? 0) + 1);
 }
 
 /** Vuelve al reporte después de «Agregar compra» (o de un gasto hecho a mitad del reporte). */
@@ -613,18 +759,23 @@ async function saveReport(ctx: Context, session: Session<Data>, messageId: numbe
   await answerCallback(cb.id);
   const data = session.datos;
   let text: string;
+  let previous: Row | undefined;
   try {
     const f = await sheetFacts(data);
     text = reportText(data, f);
-    const { Tareas, Esperado } = await readTabs(["Tareas", "Esperado"]);
+    const { Tareas, Esperado, Reportes } = await readTabs(["Tareas", "Esperado", "Reportes"]);
     const tasks = readTasks(Tareas);
+    previous = todayReport(Reportes, data.date);
+    // Una tarea terminada antes de hoy no se toca; si la terminó el reporte de hoy, una corrección la reabre.
+    const finishedToday = new Set(idList(previous?.tareas_terminadas));
     await updateCells(
       "Tareas",
       data.done.flatMap((id) => {
         const t = tasks.find((x) => x.id === id);
         if (!t) return [];
         if (data.status[id] === "terminada") return [{ row: t._row, values: { estado: "terminada" } }];
-        return t.estado === "terminada" ? [] : [{ row: t._row, values: { estado: "en curso" } }];
+        if (t.estado === "terminada" && !finishedToday.has(id)) return [];
+        return [{ row: t._row, values: { estado: "en curso" } }];
       }),
     );
     await updateCells(
@@ -637,7 +788,7 @@ async function saveReport(ctx: Context, session: Session<Data>, messageId: numbe
       }),
     );
     const terminated = data.done.filter((id) => data.status[id] === "terminada");
-    await appendRow("Reportes", {
+    const values = {
       fecha: data.date,
       hora: bogotaTime(),
       reportado_por: roleLabel(ctx),
@@ -654,18 +805,28 @@ async function saveReport(ctx: Context, session: Session<Data>, messageId: numbe
       compras_del_dia: f.purchases.join("; "),
       saldo_caja_menor: f.balance,
       texto_reporte: text,
-    });
+    };
+    if (previous) await updateCells("Reportes", [{ row: previous._row, values }]);
+    else await appendRow("Reportes", values);
   } catch (e) {
     await save(ctx, "vista", data);
     throw e;
   }
 
   await deleteSession(ctx.chatId, ctx.userId);
-  await editMessageText(ctx.chatId, messageId, `${escapeHtml(text)}\n\n✅ Reporte guardado.`);
-  // Lo que no llegó y no se avisó con los botones (reporte libre) se avisa ahora.
-  for (const e of data.expected.filter((x) => x.arrived === false)) await notifyMissing(ctx, data, e.label);
+  const done = previous ? "actualizado" : "guardado";
+  await editMessageText(ctx.chatId, messageId, `${escapeHtml(text)}\n\n✅ Reporte ${done}.`);
+  // Lo que no llegó y no se avisó con los botones ni en un reporte anterior de hoy se avisa ahora.
+  const toldBefore = new Set(String(previous?.no_llego ?? "").split("; ").filter(Boolean));
+  for (const e of data.expected.filter((x) => x.arrived === false && !toldBefore.has(x.label))) {
+    await notifyMissing(ctx, data, e.label);
+  }
   if (!(ctx.role === "carlos" && ctx.place === "private")) {
-    const who = ctx.role === "hermano" ? "Tu hermano guardó" : "Guardaste";
+    const who = ctx.role === "hermano"
+      ? `Tu hermano ${previous ? "actualizó" : "guardó"}`
+      : previous
+      ? "Actualizaste"
+      : "Guardaste";
     await sendMessage({ chatId: envNumber("CARLOS_TG_ID") }, `${who} el reporte:\n\n${escapeHtml(text)}`);
   }
 }

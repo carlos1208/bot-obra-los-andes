@@ -88,7 +88,7 @@ export async function route(ctx: Context): Promise<void> {
       await ctx.reply("Las facturas van en el tema Gastos y las fotos de obra en «Antes y después».");
       return;
     }
-    if (message.voice || message.text) return await report.offerFreeReport(ctx);
+    if (message.voice || message.text) return await report.receiveNote(ctx);
     return;
   }
   if (ctx.place === "private") {
