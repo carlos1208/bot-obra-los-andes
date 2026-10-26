@@ -7,13 +7,12 @@ import {
   enqueueRetry,
   isNewUpdate,
   latestAlbumUpdate,
-  logError,
   rescheduleRetry,
   takeAlbum,
 } from "../_shared/db.ts";
-import { envNumber } from "../_shared/env.ts";
+import { reportError } from "../_shared/errors.ts";
 import { isQuotaError } from "../_shared/gemini.ts";
-import { type Message, sendMessage, type Update } from "../_shared/telegram.ts";
+import type { Message, Update } from "../_shared/telegram.ts";
 import { type Context, createContext, roleOf } from "./context.ts";
 import { route } from "./router.ts";
 
@@ -108,13 +107,4 @@ export async function drainRetries(): Promise<void> {
   } catch (e) {
     await reportError("cola de reintentos", e);
   }
-}
-
-/** Guarda el error y avisa a Carlos por privado con una línea corta. */
-export async function reportError(context: string, e: unknown): Promise<void> {
-  const detail = e instanceof Error ? `${e.message}\n${e.stack ?? ""}` : String(e);
-  console.error(context, detail);
-  await logError(context, detail).catch(() => {});
-  const line = (e instanceof Error ? e.message : String(e)).slice(0, 200);
-  await sendMessage({ chatId: envNumber("CARLOS_TG_ID") }, `⚠️ Error (${context}): ${line}`).catch(() => {});
 }

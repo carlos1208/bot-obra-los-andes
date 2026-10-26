@@ -21,8 +21,8 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 | 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista         |
 | 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | Lista         |
 | 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre», pares en el reporte                    | Lista         |
-| 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | **En prueba** |
-| 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Pendiente     |
+| 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Lista         |
+| 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | **En prueba** |
 
 ## Estructura
 
@@ -33,6 +33,7 @@ supabase/migrations/      Tablas técnicas (updates, sesiones, álbumes, reinten
 supabase/functions/
   _shared/                Clientes de Telegram, Sheets, Drive, Gemini y Postgres; extractores; reglas de la obra
   telegram/               Webhook, enrutador y agentes
+  programado/             Avisos programados (los llama pg_cron)
 tests/                    deno test
 ```
 
@@ -268,6 +269,48 @@ una reposición de caja menor o una pregunta.
    - Para cada pregunta, Gemini dice qué datos necesita y el bot lee solo esas pestañas en ese momento: si corriges una
      celda, la siguiente respuesta ya la usa.
 
+### Prueba de la fase 6
+
+Los avisos los manda la función `programado`. La llama `pg_cron` (con `pg_net`) a las 07:00 de los lunes y a las 17:00
+de lunes a sábado, hora de Bogotá (en UTC: `0 12 * * 1` y `0 22 * * 1-6`). La URL y el secreto los lee de Vault.
+
+**Puesta en marcha** (en este orden):
+
+1. `git pull` y `deno task test`.
+2. `deno task secreto-programado` (guarda `PROGRAMADO_SECRET` en `.env.local`) y `deno task secretos`.
+3. Despliega las dos funciones (el código compartido cambió):
+   ```
+   npx supabase functions deploy programado --use-api
+   npx supabase functions deploy telegram --use-api
+   ```
+4. En el panel de Supabase → Integrations → **Vault** → «Add new secret», crea dos secretos:
+   - `programado_url`: `https://<PROJECT_REF>.supabase.co/functions/v1/programado`
+   - `programado_secreto`: el valor de `PROGRAMADO_SECRET` en `.env.local` (cópialo de ahí; no lo pegues en el chat).
+5. `npx supabase db push`: activa `pg_cron` y `pg_net` y crea los trabajos `programado-lunes` y `programado-diario`.
+   Quedan en Integrations → **Cron** → Jobs, con su historial.
+
+**Pruebas con la fecha simulada.** `deno task programado <lunes|diario> --fecha AAAA-MM-DD` llama a la función como el
+cron y muestra qué mandó. Escribe de verdad: manda los mensajes y marca `aviso_enviado` en `Esperado`.
+
+- **Lunes:** `deno task programado lunes --fecha 2026-11-02`. Al tema Reportes y a tu privado: semana 2, «Hoy es
+  festivo», los objetivos de cada persona y lo esperado de la semana.
+- **Diario:** `deno task programado diario --fecha 2026-10-28`.
+  - Lo esperado de ese día sin `llego` («Viga instalada…»): aviso a los dos (tema Reportes y tu privado) y
+    `aviso_enviado = sí`. Si lo corres otra vez, no repite el aviso.
+  - Si no hay fila de `Reportes` de ese día: recordatorio en el tema Reportes.
+  - Con `--fecha 2026-11-02` (festivo) no manda nada.
+- **Sábado:** `deno task programado diario --fecha 2026-10-31`. Además de lo diario, el cierre de la semana:
+  - objetivos cumplidos (`cumplido = sí` en `Objetivos`) y pendientes;
+  - lo esperado que no llegó o nadie confirmó;
+  - tareas atrasadas (su `fin` ya pasó y no están terminadas), con los días de obra de atraso;
+  - gastos de la semana y el recordatorio del arqueo de la caja menor;
+  - pares por validar (de Drive).
+- **El camino del cron:** en el SQL Editor, `select interno.llamar_programado('diario');` y luego
+  `select status_code, content from net._http_response order by created desc limit 1;`. Debe dar 200 con lo que mandó
+  (con la fecha real de hoy).
+
+Al terminar, borra en `Esperado` los `aviso_enviado` que marcaron las pruebas.
+
 ## Uso diario
 
 - **Cambiar el modelo de Gemini:** `npx supabase secrets set GEMINI_MODEL=<modelo>` (o `GEMINI_MODEL_FALLBACK`). No hay
@@ -279,6 +322,10 @@ una reposición de caja menor o una pregunta.
   desplegar `telegram`. Una prueba falla si las dos copias no son iguales.
 - **Pruebas:** `deno task test`. Revisión de tipos: `deno task check`.
 - **Errores:** quedan en la tabla `errores` y te llega una línea por privado. Tu hermano nunca ve detalles técnicos.
+- **Horas de los avisos:** las fija el cron, no `Config` (las horas de `Config` son de referencia). Para cambiarlas, en
+  el SQL Editor, en UTC (Bogotá + 5 h):
+  `select cron.alter_job(job_id := (select jobid from cron.job where jobname = 'programado-diario'), schedule := '0 23 * * 1-6');`
+- **Pausar los avisos:** Integrations → Cron → desactiva `programado-lunes` o `programado-diario`.
 - **Gemini sin cuota (429):** el bot responde «Lo proceso en unos minutos», guarda el mensaje en `cola_reintentos` y lo
   reintenta al minuto. Si sigue sin cuota, espera más (2, 5, 10… hasta 60 min) y el reintento corre con el siguiente
   mensaje que llegue.
@@ -293,6 +340,7 @@ Después de cambiar cualquier valor en `.env.local`: `deno task secretos`.
 | ---------------------------- | ---------------------------------------------------------------------------------------------- |
 | `TELEGRAM_BOT_TOKEN`         | BotFather → `/revoke`. Pega el nuevo token y corre `deno task webhook`.                        |
 | `TELEGRAM_WEBHOOK_SECRET`    | `deno task secreto`, `deno task secretos` y `deno task webhook`.                               |
+| `PROGRAMADO_SECRET`          | `deno task secreto-programado`, `deno task secretos` y cambia `programado_secreto` en Vault.   |
 | `GOOGLE_SA_PRIVATE_KEY`      | Crea una clave nueva en la cuenta de servicio, cámbiala y borra la vieja.                      |
 | `GOOGLE_OAUTH_REFRESH_TOKEN` | Quita el acceso en <https://myaccount.google.com/connections> y corre `deno task oauth-drive`. |
 | `GEMINI_API_KEY`             | Crea una nueva en Google AI Studio y borra la vieja.                                           |
