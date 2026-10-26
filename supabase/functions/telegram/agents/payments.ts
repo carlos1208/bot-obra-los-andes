@@ -1,8 +1,7 @@
-// Pagos e hitos (solo Carlos, por su privado): texto o voz → Gemini → vista previa con controles →
-// «Sí, guardar» o «Corregir campo». Nada se escribe en la hoja hasta «Sí, guardar».
-// Al guardar: fila en Pagos y, si es de un hito, pagado = sí y fecha_pago en Hitos (y fecha_cumplido si se
-// marcó). La reposición de caja menor va a Pagos con a_quien = Caja menor y cuenta_12M = no, y responde con el
-// arqueo: efectivo esperado + facturas sin reponer = fondo_caja_menor.
+// Pagos (solo Carlos, por su privado): texto o voz → Gemini → vista previa → «Sí, guardar» o «Corregir campo».
+// Nada se escribe en la hoja hasta «Sí, guardar». El pago no se liga a un hito: Hitos lo maneja Carlos.
+// Al guardar: fila en Pagos. La reposición de caja menor va a Pagos con a_quien = Caja menor y cuenta_12M = no,
+// y responde con el arqueo: efectivo esperado + facturas sin reponer = fondo_caja_menor.
 
 import { claimStep, deleteSession, readSession, saveSession, type Session } from "../../_shared/db.ts";
 import type { PrivateMessage } from "../../_shared/extractors.ts";
@@ -15,18 +14,16 @@ import {
   shortDate,
   todayISO,
 } from "../../_shared/format.ts";
-import { appendRow, readTabs, updateCells } from "../../_shared/sheets.ts";
+import { appendRow, readTabs } from "../../_shared/sheets.ts";
 import {
   available12M,
   budgetChapters,
   isPettyCash,
   masonPaid,
-  type Milestone,
   PAYEES,
   pettyCashBalance,
   pettyCashToRefill,
   readConfig,
-  readMilestones,
   type Row,
 } from "../../_shared/site.ts";
 import { answerCallback, editKeyboard, editMessageText, type Keyboard } from "../../_shared/telegram.ts";
@@ -38,14 +35,13 @@ import { interpret } from "./interpret.ts";
 export const FLOW = "pago";
 
 const REFILL_CONCEPT = "Reposición de caja menor";
-const EXAMPLE = "«le pagué 700 mil al albañil por el H1 por Nequi» o «repuse 230 mil de caja menor»";
+const EXAMPLE = "«le pagué 700 mil al albañil por Nequi» o «repuse 230 mil de caja menor»";
 
-type Field = "payee" | "concept" | "milestone" | "amount" | "method" | "date" | "chapter";
+type Field = "payee" | "concept" | "amount" | "method" | "date" | "chapter";
 
 const FIELD_NAMES: Record<Field, string> = {
   payee: "A quién",
   concept: "Concepto",
-  milestone: "Hito",
   amount: "Valor",
   method: "Medio",
   date: "Fecha",
@@ -63,13 +59,10 @@ const ASK_FIELD: Partial<Record<Field, string>> = {
 interface Draft {
   payee: string;
   concept: string;
-  milestone: string; // "" = ninguno
   amount: number | null;
   method: string;
   date: string;
   chapter: string;
-  markDone: boolean; // marcar el hito cumplido al guardar
-  saved?: boolean; // la fila de Pagos ya quedó (si falló Hitos, no se repite)
 }
 
 interface Data extends FlowBase {
@@ -107,16 +100,13 @@ export async function start(ctx: Context): Promise<void> {
 export async function fromMessage(ctx: Context, got: PrivateMessage, wait: number): Promise<void> {
   const today = todayISO();
   const refill = got.kind === "reposicion" || isPettyCash(got.payee);
-  const milestone = refill || got.milestone === "ninguno" ? "" : got.milestone;
   const draft: Draft = {
-    payee: refill ? "Caja menor" : canonicalPayee(got.payee ?? (milestone ? "Albañil" : "")),
+    payee: refill ? "Caja menor" : canonicalPayee(got.payee ?? ""),
     concept: refill ? REFILL_CONCEPT : got.concept?.trim() ?? "",
-    milestone,
     amount: got.amount,
     method: got.method?.trim() ?? "",
     date: (got.date && parseDateInput(got.date, today)) || today,
     chapter: refill ? "" : got.chapter,
-    markDone: false,
   };
   await showPreview(ctx, { draft }, wait);
 }
@@ -131,28 +121,16 @@ function canonicalPayee(name: string): string {
 interface Sheet {
   Config: Row[];
   Pagos: Row[];
-  Hitos: Row[];
   Gastos: Row[];
 }
 
-const readSheet = (): Promise<Sheet> => readTabs(["Config", "Pagos", "Hitos", "Gastos"]);
-
-function milestoneOf(d: Draft, sheet: Sheet): Milestone | undefined {
-  return d.milestone ? readMilestones(sheet.Hitos).find((h) => h.hito === d.milestone) : undefined;
-}
-
-/** Hito del pago que todavía no está cumplido: se ofrece marcarlo. */
-function pendingDone(d: Draft, sheet: Sheet): Milestone | undefined {
-  const h = milestoneOf(d, sheet);
-  return h && !h.fecha_cumplido ? h : undefined;
-}
+const readSheet = (): Promise<Sheet> => readTabs(["Config", "Pagos", "Gastos"]);
 
 function previewText(d: Draft, sheet: Sheet, notice?: string, saved = false): string {
   const cfg = readConfig(sheet.Config);
   const missing = "<i>falta</i>";
   const value = (s: string) => s ? escapeHtml(s) : "—";
   const refill = isPettyCash(d.payee);
-  const h = milestoneOf(d, sheet);
   const lines = refill
     ? [
       "<b>Reposición de caja menor</b>",
@@ -165,7 +143,6 @@ function previewText(d: Draft, sheet: Sheet, notice?: string, saved = false): st
       "<b>Pago</b>",
       `A quién: ${d.payee ? escapeHtml(d.payee) : missing}`,
       `Concepto: ${value(d.concept)}`,
-      `Hito: ${h ? `${h.hito} ${escapeHtml(h.nombre)} (a pagar ${formatPesos(h.valor_a_pagar)})` : "—"}`,
       `Valor: ${d.amount === null ? missing : formatPesos(d.amount)}`,
       `Medio: ${value(d.method)}`,
       `Fecha: ${shortDate(d.date)}`,
@@ -183,11 +160,6 @@ function previewText(d: Draft, sheet: Sheet, notice?: string, saved = false): st
       }.`,
     );
   } else {
-    if (h && d.amount !== null && d.amount !== h.valor_a_pagar) {
-      notes.push(
-        `⚠️ El ${h.hito} tiene ${formatPesos(h.valor_a_pagar)} a pagar y este pago es de ${formatPesos(d.amount)}.`,
-      );
-    }
     const limit = cfg.total_albanil + cfg.reserva_albanil;
     const paid = masonPaid(sheet.Pagos) + (d.amount ?? 0);
     if (normalize(d.payee) === "albanil" && paid > limit) {
@@ -196,26 +168,14 @@ function previewText(d: Draft, sheet: Sheet, notice?: string, saved = false): st
           `(total ${formatPesos(cfg.total_albanil)} + reserva ${formatPesos(cfg.reserva_albanil)}).`,
       );
     }
-    const open = pendingDone(d, sheet);
-    if (open) {
-      notes.push(
-        d.markDone
-          ? `Al guardar, el ${open.hito} queda cumplido hoy.`
-          : `El ${open.hito} no está marcado como cumplido. ¿Lo marco cumplido hoy? Toca el botón.`,
-      );
-    }
   }
   return [...lines, ...(notes.length ? ["", ...notes] : []), ...(notice ? ["", notice] : [])].join("\n");
 }
 
-function previewKeyboard(d: Draft, sheet: Sheet): Keyboard {
-  const open = isPettyCash(d.payee) ? undefined : pendingDone(d, sheet);
-  return [
-    [button("Sí, guardar", "pag:ok"), button("Corregir campo", "pag:c")],
-    ...(open ? [[button(`${d.markDone ? "✅" : "☐"} Marcar ${open.hito} cumplido`, "pag:cum")]] : []),
-    [button("Cancelar", "pag:x")],
-  ];
-}
+const PREVIEW_KEYBOARD: Keyboard = [
+  [button("Sí, guardar", "pag:ok"), button("Corregir campo", "pag:c")],
+  [button("Cancelar", "pag:x")],
+];
 
 /** Muestra la vista previa editando `editId` o en un mensaje nuevo. Lee la hoja en este momento. */
 async function showPreview(ctx: Context, data: Data, editId?: number, notice?: string): Promise<void> {
@@ -223,15 +183,15 @@ async function showPreview(ctx: Context, data: Data, editId?: number, notice?: s
   const sheet = await readSheet();
   const text = previewText(d, sheet, notice);
   let msg = editId;
-  if (editId) await editMessageText(ctx.chatId, editId, text, previewKeyboard(d, sheet));
-  else msg = (await ctx.reply(text, previewKeyboard(d, sheet))).message_id;
+  if (editId) await editMessageText(ctx.chatId, editId, text, PREVIEW_KEYBOARD);
+  else msg = (await ctx.reply(text, PREVIEW_KEYBOARD)).message_id;
   await save(ctx, "vista", { draft: d, msg });
 }
 
 function fieldKeyboard(d: Draft): Keyboard {
   const fields: Field[] = isPettyCash(d.payee)
     ? ["payee", "amount", "method", "date"]
-    : ["payee", "concept", "milestone", "amount", "method", "date", "chapter"];
+    : ["payee", "concept", "amount", "method", "date", "chapter"];
   const rows: Keyboard = [];
   for (let i = 0; i < fields.length; i += 2) {
     rows.push(fields.slice(i, i + 2).map((f) => button(FIELD_NAMES[f], `pag:f:${f}`)));
@@ -256,8 +216,7 @@ export async function onButton(ctx: Context): Promise<void> {
 
   if (action === "x") {
     await answerCallback(cb.id);
-    const done = d?.saved ? "El pago ya quedó en Pagos; faltó actualizar Hitos." : "No guardé nada.";
-    await editMessageText(ctx.chatId, messageId, `Cancelado. ${done}`);
+    await editMessageText(ctx.chatId, messageId, "Cancelado. No guardé nada.");
     await deleteSession(ctx.chatId, ctx.userId);
     return;
   }
@@ -269,9 +228,6 @@ export async function onButton(ctx: Context): Promise<void> {
   switch (action) {
     case "ok":
       return await savePayment(ctx, session, messageId);
-    case "cum":
-      d.markDone = !d.markDone;
-      return await showPreview(ctx, data, messageId);
     case "c":
       await editKeyboard(ctx.chatId, messageId, fieldKeyboard(d));
       return;
@@ -287,11 +243,6 @@ export async function onButton(ctx: Context): Promise<void> {
       if (payee) setPayee(d, payee);
       return await showPreview(ctx, data, messageId);
     }
-    case "h":
-      d.milestone = value === "-" ? "" : value;
-      d.markDone = false;
-      if (d.milestone && !d.payee) d.payee = "Albañil";
-      return await showPreview(ctx, data, messageId);
     case "cap": {
       const chapter = budgetChapters((await readTabs(["Presupuesto"])).Presupuesto)[Number(value)];
       if (chapter) d.chapter = chapter;
@@ -305,7 +256,7 @@ function setPayee(d: Draft, payee: string): void {
   const wasRefill = isPettyCash(d.payee);
   d.payee = canonicalPayee(payee);
   if (isPettyCash(d.payee)) {
-    Object.assign(d, { concept: REFILL_CONCEPT, milestone: "", chapter: "", markDone: false });
+    Object.assign(d, { concept: REFILL_CONCEPT, chapter: "" });
   } else if (wasRefill && d.concept === REFILL_CONCEPT) {
     d.concept = "";
   }
@@ -318,13 +269,6 @@ async function chooseField(ctx: Context, data: Data, field: Field, messageId: nu
       rows.push(PAYEES.slice(i, i + 2).map((p, k) => button(p, `pag:p:${i + k}`)));
     }
     rows.push([button("Otro (escribir)", "pag:f:payeeText"), button("Volver", "pag:v")]);
-    await editKeyboard(ctx.chatId, messageId, rows);
-    return;
-  }
-  if (field === "milestone") {
-    const hitos = readMilestones((await readTabs(["Hitos"])).Hitos);
-    const rows: Keyboard = hitos.map((h) => [button(short(`${h.hito} ${h.nombre}`), `pag:h:${h.hito}`)]);
-    rows.push([button("Ninguno", "pag:h:-"), button("Volver", "pag:v")]);
     await editKeyboard(ctx.chatId, messageId, rows);
     return;
   }
@@ -407,31 +351,21 @@ async function savePayment(ctx: Context, session: Session<Data>, messageId: numb
   if (!(await claimStep(ctx.chatId, ctx.userId, "vista", "guardando"))) return;
 
   const refill = isPettyCash(d.payee);
-  let h: Milestone | undefined;
   let before!: Sheet;
   try {
-    const sheet = before = await readSheet();
-    h = milestoneOf(d, sheet);
-    if (!d.saved) {
-      await appendRow("Pagos", {
-        fecha: d.date,
-        a_quien: d.payee,
-        concepto: d.concept,
-        hito: d.milestone,
-        capitulo: d.chapter,
-        valor: d.amount,
-        medio: d.method,
-        cuenta_12M: refill ? "no" : "sí",
-        registrado_por: "Carlos",
-      });
-      d.saved = true;
-    }
-    if (h) {
-      const done = d.markDone && !h.fecha_cumplido ? { fecha_cumplido: todayISO() } : {};
-      await updateCells("Hitos", [{ row: h._row, values: { pagado: "sí", fecha_pago: d.date, ...done } }]);
-    }
+    before = await readSheet();
+    await appendRow("Pagos", {
+      fecha: d.date,
+      a_quien: d.payee,
+      concepto: d.concept,
+      capitulo: d.chapter,
+      valor: d.amount,
+      medio: d.method,
+      cuenta_12M: refill ? "no" : "sí",
+      registrado_por: "Carlos",
+    });
   } catch (e) {
-    // No quedó todo guardado: se puede volver a tocar «Sí, guardar» y sigue donde iba.
+    // No quedó guardado: se puede volver a tocar «Sí, guardar».
     await save(ctx, "vista", data);
     throw e;
   }
@@ -460,11 +394,7 @@ async function savePayment(ctx: Context, session: Session<Data>, messageId: numb
     );
     return;
   }
-  const lines = [
-    `Guardé ${formatPesos(d.amount)} a ${escapeHtml(d.payee)}${
-      h ? ` (${h.hito} pagado${d.markDone && !h.fecha_cumplido ? " y cumplido" : ""})` : ""
-    }.`,
-  ];
+  const lines = [`Guardé ${formatPesos(d.amount)} a ${escapeHtml(d.payee)}.`];
   if (normalize(d.payee) === "albanil") {
     lines.push(
       `Al albañil se le ha pagado ${formatPesos(masonPaid(fresh.Pagos))} de ${formatPesos(cfg.total_albanil)}.`,

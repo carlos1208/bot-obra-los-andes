@@ -38,7 +38,7 @@ const HELP = [
 ].join("\n");
 
 const EXAMPLE_QUESTION = "«¿qué toca esta semana?»";
-const EXAMPLE_PAYMENT = "«le pagué 700 mil al albañil por el H1 por Nequi»";
+const EXAMPLE_PAYMENT = "«le pagué 700 mil al albañil por Nequi»";
 
 /** Foto que puede ser varias cosas: en el privado de Carlos, factura o ANTES; del hermano en el tema de fotos,
  * DESPUÉS o ANTES por imprevisto. */

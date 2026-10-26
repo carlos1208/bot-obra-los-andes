@@ -247,21 +247,20 @@ Antes: `git pull`, `deno task test`, `npx supabase functions deploy telegram --u
 `/pago` en el menú). Todo va por el privado con el bot: un texto o una nota de voz lo lee Gemini y decide si es un pago,
 una reposición de caja menor o una pregunta.
 
-1. **Pago del H1 por 700.000:** «le pagué 700 mil al albañil por el H1 por Nequi» (o `/pago` y luego el mensaje).
-   - Vista previa: a quién, concepto, hito con su valor a pagar, valor, medio, fecha, capítulo y «Cuenta en los 12 M:
-     sí».
-   - Controles: avisa si el valor no es el `valor_a_pagar` del hito y si lo pagado al albañil pasaría del total más la
-     reserva (`total_albanil` y `reserva_albanil`). Si el hito no tiene `fecha_cumplido`, pregunta si lo marca cumplido:
-     toca «☐ Marcar H1 cumplido» (queda ✅).
-   - «Corregir campo» cambia cualquier dato (a quién y el hito con botones; el valor, la fecha y el resto, escritos).
-   - «Sí, guardar»: fila en `Pagos` y, en `Hitos`, `pagado = sí`, `fecha_pago` y, si lo marcaste, `fecha_cumplido`.
-     Responde con lo pagado al albañil y el disponible de los 12 M.
+1. **Pago de 700.000 al albañil:** «le pagué 700 mil al albañil por Nequi» (o `/pago` y luego el mensaje).
+   - Vista previa: a quién, concepto, valor, medio, fecha, capítulo y «Cuenta en los 12 M: sí».
+   - El pago no se liga a un hito: `Hitos` no se toca al pagar (lo manejas tú). Si dices «por el H1», queda en el
+     concepto.
+   - Control: avisa si lo pagado al albañil pasaría del total más la reserva (`total_albanil` y `reserva_albanil`).
+   - «Corregir campo» cambia cualquier dato (a quién y el capítulo con botones; el valor, la fecha y el resto,
+     escritos).
+   - «Sí, guardar»: fila en `Pagos`. Responde con lo pagado al albañil y el disponible de los 12 M.
 2. **Reposición de caja menor:** «repuse 87.500 de caja menor». La vista previa muestra el efectivo esperado y las
    facturas sin reponer. Al guardar queda en `Pagos` con `a_quien = Caja menor` y `cuenta_12M = no`, y responde con el
    arqueo: efectivo esperado antes de reponer + facturas sin reponer = fondo (100.000). Avisa si lo repuesto no es igual
    a las facturas.
-3. **«Marcar H2 cumplido»** (texto exacto, sin Gemini): muestra el criterio del hito; «Cambiar fecha» o «Sí, guardar»
-   pone `fecha_cumplido`.
+3. **«Marcar H2 cumplido»** (texto exacto, sin Gemini, solo si lo escribes): muestra el criterio del hito; «Cambiar
+   fecha» o «Sí, guardar» pone `fecha_cumplido`.
 4. **Tres consultas:**
    - Tú: «¿cuánto queda de los 12 M?» y «¿qué debe llegar hoy?». La respuesta termina con «Dato de la hoja, hh:mm».
    - Tu hermano, por su privado: «¿cuánto se le ha pagado al albañil?» → «Eso lo ve solo Carlos.»

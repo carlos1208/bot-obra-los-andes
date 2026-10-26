@@ -4,7 +4,7 @@
 import { interpretMessage, type PrivateMessage } from "../../_shared/extractors.ts";
 import { shortDate, todayISO } from "../../_shared/format.ts";
 import { readTabs } from "../../_shared/sheets.ts";
-import { budgetChapters, payeesOf, readMilestones } from "../../_shared/site.ts";
+import { budgetChapters, payeesOf } from "../../_shared/site.ts";
 import { downloadFile } from "../../_shared/telegram.ts";
 import type { Context } from "../context.ts";
 
@@ -20,14 +20,13 @@ export async function interpret(ctx: Context): Promise<Interpreted | null> {
   const text = m.text?.trim();
   if (!text && !m.voice) return null;
   const wait = await ctx.reply(m.voice ? "Escuchando…" : "Un momento…");
-  const { Pagos, Hitos, Presupuesto } = await readTabs(["Pagos", "Hitos", "Presupuesto"]);
+  const { Pagos, Presupuesto } = await readTabs(["Pagos", "Presupuesto"]);
   const input = m.voice ? { mimeType: "audio/ogg", bytes: (await downloadFile(m.voice.file_id)).bytes } : text!;
   const today = todayISO();
   const got = await interpretMessage(input, {
     fromCarlos: ctx.role === "carlos",
     today: `${shortDate(today)} de ${today.slice(0, 4)} (${today})`,
     payees: payeesOf(Pagos),
-    milestones: readMilestones(Hitos).map((h) => ({ code: h.hito, name: h.nombre })),
     chapters: budgetChapters(Presupuesto),
   });
   return { got: { ...got, transcript: text ?? got.transcript }, wait: wait.message_id };

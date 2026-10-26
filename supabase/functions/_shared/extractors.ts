@@ -239,7 +239,6 @@ export interface PrivateMessage {
   kind: "pago" | "reposicion" | "pregunta" | "otro";
   payee: string | null;
   concept: string | null;
-  milestone: string; // H1…H5 o «ninguno»
   amount: number | null;
   method: string | null;
   date: string | null; // AAAA-MM-DD
@@ -254,8 +253,7 @@ const PRIVATE_INSTRUCTIONS = (who: string, today: string) =>
 - kind: «pago» si cuenta un pago que ya hizo; «reposicion» si repuso o recargó la caja menor; «pregunta» si pregunta algo de la obra; «otro» si no es nada de eso.
 Si es pago o reposición:
 - payee: a quién se le pagó, con uno de los nombres de la lista si corresponde. En una reposición, «Caja menor».
-- concept: concepto corto. En un hito: «Hito H2 – <nombre del hito>». En una reposición: «Reposición de caja menor».
-- milestone: el hito del albañil (H1 a H5) si el pago es de un hito; si no, «ninguno».
+- concept: concepto corto, con lo que dice el mensaje (si menciona un hito, va en el concepto). En una reposición: «Reposición de caja menor».
 - amount: valor en pesos enteros: «700 mil» = 700000, «1,2 M» = 1200000, «un millón doscientos» = 1200000. Si no lo dice, null.
 - method: medio de pago como lo dice (Nequi, efectivo, transferencia…); si no lo dice, null.
 - date: fecha del pago en AAAA-MM-DD. Sin fecha o «hoy» = hoy; «ayer» = el día anterior.
@@ -272,7 +270,6 @@ export function interpretMessage(
     fromCarlos: boolean;
     today: string; // «mié 28 oct de 2026 (2026-10-28)»
     payees: string[];
-    milestones: { code: string; name: string }[];
     chapters: string[];
   },
   model?: string,
@@ -282,10 +279,7 @@ export function interpretMessage(
   return generateJson<PrivateMessage>({
     instructions: PRIVATE_INSTRUCTIONS(who, opts.today),
     parts: [
-      [
-        `A quién se paga: ${opts.payees.join(", ")}.`,
-        `Hitos del albañil: ${opts.milestones.map((m) => `${m.code} ${m.name}`).join("; ")}.`,
-      ].join("\n"),
+      `A quién se paga: ${opts.payees.join(", ")}.`,
       audio ? "Mensaje en esta nota de voz:" : `Mensaje: ${input}`,
       ...(audio ? [input] : []),
     ],
@@ -296,7 +290,6 @@ export function interpretMessage(
         kind: { type: "string", enum: ["pago", "reposicion", "pregunta", "otro"] },
         payee: { type: ["string", "null"], description: "A quién se le pagó" },
         concept: { type: ["string", "null"], description: "Concepto corto" },
-        milestone: { type: "string", enum: [...opts.milestones.map((m) => m.code), "ninguno"] },
         amount: { type: ["integer", "null"], description: "Valor en pesos enteros" },
         method: { type: ["string", "null"], description: "Medio de pago" },
         date: { type: ["string", "null"], format: "date", description: "Fecha del pago" },
@@ -316,7 +309,6 @@ export function interpretMessage(
         "kind",
         "payee",
         "concept",
-        "milestone",
         "amount",
         "method",
         "date",

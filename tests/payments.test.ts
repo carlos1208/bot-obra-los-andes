@@ -1,5 +1,5 @@
-// Fase 5 de punta a punta: pago del H1 con sus controles, reposición de caja menor con arqueo, «Marcar H#
-// cumplido», /pago y preguntas (una del hermano negada por hermano_ve_dinero).
+// Fase 5 de punta a punta: pago (sin ligarlo a un hito) con su control, reposición de caja menor con arqueo,
+// «Marcar H# cumplido», /pago y preguntas (una del hermano negada por hermano_ve_dinero).
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 import {
   BROTHER,
@@ -29,8 +29,7 @@ const read = (over: Record<string, unknown> = {}) => ({
   transcript: "",
   kind: "pago",
   payee: "albañil",
-  concept: "Hito H1 – Cocina abierta",
-  milestone: "H1",
+  concept: "Hito H1",
   amount: 700000,
   method: "Nequi",
   date: "2026-10-31",
@@ -40,56 +39,52 @@ const read = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 const question = (topics: string[], money = false) =>
-  read({ kind: "pregunta", payee: null, concept: null, milestone: "ninguno", amount: null, topics, money });
-const h1 = () => rowsOf("Hitos").find((r) => r.hito === "H1")!;
+  read({ kind: "pregunta", payee: null, concept: null, amount: null, topics, money });
 
-Deno.test("pago del H1 por 700.000: vista previa, marcar cumplido, Pagos y Hitos", async () => {
+Deno.test("pago de 700.000 al albañil: vista previa sin hito, Pagos y Hitos sin tocar", async () => {
   await resetSheet();
   clearSent();
   gemini.replies.push(read());
   await processUpdate(message(CARLOS, { text: "le pagué 700 mil al albañil por el H1 por Nequi" }));
   assertEquals(sent.find((e) => e.method === "sendMessage")!.params.text, "Un momento…");
-  // Gemini recibe los hitos y la lista de a quién se paga.
-  const parts = gemini.calls.at(-1)!.body.contents[0].parts.map((p: { text?: string }) => p.text ?? "").join("\n");
-  assertStringIncludes(parts, "H1 Cocina abierta; H2 Cocina en obra gris");
+  // Gemini recibe la lista de a quién se paga, y nada de hitos.
+  const call = gemini.calls.at(-1)!.body;
+  const parts = call.contents[0].parts.map((p: { text?: string }) => p.text ?? "").join("\n");
   assertStringIncludes(parts, "A quién se paga: Albañil, Carpintero");
+  assert(!parts.includes("Cocina abierta"));
+  assertEquals(call.generationConfig.responseFormat.text.schema.properties.milestone, undefined);
 
   const preview = lastText();
   assertStringIncludes(
     preview,
-    "<b>Pago</b>\nA quién: Albañil\nConcepto: Hito H1 – Cocina abierta\nHito: H1 Cocina abierta (a pagar $700.000)\n" +
-      "Valor: $700.000\nMedio: Nequi\nFecha: sáb 31 oct\nCapítulo: Albañil (saldo de los 5 hitos)\nCuenta en los 12 M: sí",
+    "<b>Pago</b>\nA quién: Albañil\nConcepto: Hito H1\nValor: $700.000\nMedio: Nequi\nFecha: sáb 31 oct\n" +
+      "Capítulo: Albañil (saldo de los 5 hitos)\nCuenta en los 12 M: sí",
   );
-  assertStringIncludes(preview, "El H1 no está marcado como cumplido. ¿Lo marco cumplido hoy? Toca el botón.");
   assert(!preview.includes("⚠️"));
-  assert(buttons().includes("☐ Marcar H1 cumplido|pag:cum"));
+  assertEquals(buttons(), ["Sí, guardar|pag:ok", "Corregir campo|pag:c", "Cancelar|pag:x"]);
   assertEquals(rowsOf("Pagos").length, 3); // nada escrito todavía
 
-  await processUpdate(tap(CARLOS, "pag:cum"));
-  assert(buttons().includes("✅ Marcar H1 cumplido|pag:cum"));
-  assertStringIncludes(lastText(), "Al guardar, el H1 queda cumplido hoy.");
-
+  const hitos = JSON.stringify(rowsOf("Hitos"));
   await processUpdate(tap(CARLOS, "pag:ok"));
   const pago = rowsOf("Pagos").at(-1)!;
   assertEquals(
-    [pago.fecha, pago.a_quien, pago.hito, pago.valor, pago.medio, pago.cuenta_12M, pago.registrado_por],
-    ["2026-10-31", "Albañil", "H1", 700000, "Nequi", "sí", "Carlos"],
+    [pago.fecha, pago.a_quien, pago.concepto, pago.hito, pago.valor, pago.medio, pago.cuenta_12M, pago.registrado_por],
+    ["2026-10-31", "Albañil", "Hito H1", "", 700000, "Nequi", "sí", "Carlos"],
   );
-  assertEquals([h1().pagado, h1().fecha_pago, h1().fecha_cumplido], ["sí", "2026-10-31", "2026-10-31"]);
+  assertEquals(JSON.stringify(rowsOf("Hitos")), hitos);
   assertEquals(
     lastText(),
-    "Guardé $700.000 a Albañil (H1 pagado y cumplido).\nAl albañil se le ha pagado $900.000 de $4.500.000.\n" +
+    "Guardé $700.000 a Albañil.\nAl albañil se le ha pagado $900.000 de $4.500.000.\n" +
       "Disponible de los 12 M: $11.300.000.",
   );
   assertEquals((tables.sesiones ?? []).length, 0);
 });
 
-Deno.test("controles: valor distinto al del hito y albañil por encima del total más la reserva", async () => {
+Deno.test("control: lo pagado al albañil por encima del total más la reserva", async () => {
   await resetSheet();
   clearSent();
-  gemini.replies.push(read({ milestone: "H2", concept: "Hito H2", amount: 4_900_000 }));
-  await processUpdate(message(CARLOS, { text: "le pagué 4,9 M al albañil por el H2" }));
-  assertStringIncludes(lastText(), "⚠️ El H2 tiene $900.000 a pagar y este pago es de $4.900.000.");
+  gemini.replies.push(read({ concept: "Pago al albañil", amount: 4_900_000 }));
+  await processUpdate(message(CARLOS, { text: "le pagué 4,9 M al albañil" }));
   assertStringIncludes(
     lastText(),
     "⚠️ Con este pago, al albañil se le habrán pagado $5.100.000: pasa de $5.000.000 (total $4.500.000 + reserva $500.000).",
@@ -118,7 +113,7 @@ Deno.test("reposición de caja menor: Pagos con cuenta_12M = no y arqueo", async
   });
   addExpense({ fecha: "2026-10-29", proveedor: "Depósito", valor: 35000, medio_pago: "caja menor", cuenta_12M: "sí" });
   gemini.replies.push(
-    read({ kind: "reposicion", payee: "Caja menor", milestone: "ninguno", amount: 87500, method: null }),
+    read({ kind: "reposicion", payee: "Caja menor", amount: 87500, method: null }),
   );
   await processUpdate(message(CARLOS, voice("v1")));
   assertEquals(sent.find((e) => e.method === "sendMessage")!.params.text, "Escuchando…");
@@ -129,7 +124,6 @@ Deno.test("reposición de caja menor: Pagos con cuenta_12M = no y arqueo", async
     "<b>Reposición de caja menor</b>\nValor: $87.500\nMedio: —\nFecha: sáb 31 oct\nCuenta en los 12 M: no",
   );
   assertStringIncludes(preview, "Hoy: efectivo esperado $12.500 y facturas sin reponer $87.500.");
-  assert(!buttons().some((b) => b.includes("cumplido")));
 
   await processUpdate(tap(CARLOS, "pag:ok"));
   const pago = rowsOf("Pagos").at(-1)!;
@@ -159,10 +153,10 @@ Deno.test("/pago espera el pago; solo Carlos y solo por privado", async () => {
   await processUpdate(message(CARLOS, { text: "¿cuánto le debo al albañil?" }));
   assertStringIncludes(lastText(), "No entendí el pago.");
   gemini.replies.push(
-    read({ payee: "Drywall", milestone: "ninguno", concept: "Adelanto del drywall", amount: 300000 }),
+    read({ payee: "Drywall", concept: "Adelanto del drywall", amount: 300000 }),
   );
   await processUpdate(message(CARLOS, { text: "le di 300 mil al de drywall" }));
-  assertStringIncludes(lastText(), "A quién: Drywall\nConcepto: Adelanto del drywall\nHito: —\nValor: $300.000");
+  assertStringIncludes(lastText(), "A quién: Drywall\nConcepto: Adelanto del drywall\nValor: $300.000");
   await processUpdate(tap(CARLOS, "pag:ok"));
   assertEquals(rowsOf("Pagos").at(-1)!.a_quien, "Drywall");
   assertStringIncludes(lastText(), "Guardé $300.000 a Drywall.\nDisponible de los 12 M: $11.700.000.");
