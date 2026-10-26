@@ -175,6 +175,8 @@ for (const t of TABS) {
         fields: "userEnteredFormat(textFormat,backgroundColor)",
       },
     },
+    // Borra el formato que quedó debajo del encabezado (p. ej. filas que copiaron el del encabezado).
+    { repeatCell: { range: { sheetId, startRowIndex: 1 }, cell: {}, fields: "userEnteredFormat" } },
   );
   headers.forEach((h, c) => {
     const format = MONEY_COLUMNS.has(h) ? MONEY_FORMAT : DATE_COLUMNS.has(h) ? DATE_FORMAT : null;

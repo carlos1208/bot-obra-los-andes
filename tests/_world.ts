@@ -266,6 +266,7 @@ export const { processUpdate, timing } = await import("../supabase/functions/tel
 export const { clock } = await import("../supabase/functions/_shared/format.ts");
 
 // --- Ayudas ----------------------------------------------------------------------
+const nameOf = (id: number) => id === CARLOS ? "Carlos" : id === BROTHER ? "Hermano" : "x";
 let nextUpdate = 1000;
 let nextMessage = 1;
 export function message(from: number, extra: Record<string, unknown>, chat = from, topic?: number): Update {
@@ -273,7 +274,7 @@ export function message(from: number, extra: Record<string, unknown>, chat = fro
     update_id: nextUpdate++,
     message: {
       message_id: nextMessage++,
-      from: { id: from, first_name: "x" },
+      from: { id: from, first_name: nameOf(from) },
       chat: { id: chat, type: chat < 0 ? "supergroup" : "private" },
       message_thread_id: topic,
       date: 0,
@@ -286,7 +287,7 @@ export function tap(from: number, data: string, chat = from, topic?: number, mes
     update_id: nextUpdate++,
     callback_query: {
       id: `cb${nextUpdate}`,
-      from: { id: from, first_name: "x" },
+      from: { id: from, first_name: nameOf(from) },
       data,
       message: {
         message_id: messageId,

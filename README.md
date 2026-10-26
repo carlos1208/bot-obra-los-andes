@@ -19,7 +19,7 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 | ---------------------- | --------------------------------------------------------------------------------------------------------------- | ------------- |
 | 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista         |
 | 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista         |
-| 3. MVP                 | Enrutador, reporte diario (botones o notas del día), gastos con caja menor y cola de reintentos                 | **En prueba** |
+| 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | **En prueba** |
 | 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre»                                         | Pendiente     |
 | 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Pendiente     |
 | 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Pendiente     |
@@ -172,31 +172,35 @@ deno task validar-ia --facturas "C:\Users\Carlos\Documents\Documentos personales
 
 ### Prueba de la fase 3
 
-Antes: `git pull`, `deno task test`, `deno task crear-hoja` (agrega la pestaña `Notas`; no toca las que tienen datos),
-`npx supabase functions deploy telegram --use-api` y `deno task webhook` (registra `/reporte` y `/gasto` en el menú).
-Mientras tu hermano no esté, haz todo tú: el bot te deja reportar y registrar compras. Prueba desde el lun 26 oct: antes
-no hay tareas en la semana.
+Antes: `git pull`, `deno task test`, `deno task crear-hoja --reemplazar Reportes,Notas` (pone los encabezados nuevos de
+`Reportes` y borra las filas de prueba de las dos pestañas), `npx supabase functions deploy telegram --use-api` y
+`deno task webhook` (registra `/reporte` y `/gasto` en el menú). Mientras tu hermano no esté, haz todo tú.
 
-- **Reporte completo** en el tema Reportes con `/reporte`:
-  1. Marca dos tareas → «Listo» → una «Terminada» y otra «Avanzó».
-  2. Revisa el avance del objetivo, la caja menor y toca «Agregar compra»: registra una factura y verifica que vuelve al
-     reporte con la compra y el saldo nuevo.
-  3. Si hay algo esperado hoy, marca «No llegó» en uno: te debe llegar el aviso por privado en ese momento.
-  4. Agua, novedades con «Otro» por nota de voz y para mañana.
-  5. En la vista previa toca «Corregir sección», cambia una y luego «Sí, guardar». Revisa la fila en `Reportes`, el
-     `estado` en `Tareas`, `llego` en `Esperado` y el resumen por privado.
-- **Compra por caja menor** en el tema Gastos: foto de una factura de menos de $100.000 → «Caja menor» → «Corregir
-  campo» en algo → «Sí, guardar». Revisa la fila en `Gastos`, la foto en Drive `Facturas/` y el saldo de la caja.
+**Reporte del día** (tema Reportes):
+
+1. Manda notas de voz o textos con lo que se hizo. A cada una el bot responde «¿Quisiste decir esto?» con un resumen:
+   - «Sí»: la nota queda en `Notas` y sale el resumen del día con todas las notas y el botón «Cerrar el reporte».
+   - «No»: pide una aclaración en texto u otro audio y vuelve a preguntar. «Descartar la nota» no guarda nada.
+   - Una nota que llega antes de responder espera su turno.
+2. «Cerrar el reporte»: llega la lista numerada de todas las tareas pendientes, por sección (⏰ = atrasada). Responde
+   con los números de las terminadas separados por guion (`2-5`; los espacios no importan) o toca «Ninguna». El bot
+   confirma cuáles entendió.
+3. Si hay algo esperado hoy, marca «Llegó» o «No llegó» (con «No llegó» te llega el aviso por privado en el momento).
+4. Vista previa: resumen del día, quién terminó qué, avance de la obra y de la sección contra el cronograma (con el
+   desvío), lo que sigue, compras, caja menor y lo esperado. «Corregir tareas», «Corregir lo esperado» y «Agregar
+   compra» llevan al paso y vuelven aquí.
+5. «Sí, guardar»: fila en `Reportes`, `estado` en `Tareas`, `llego` en `Esperado` y el resumen por privado. Manda otra
+   nota después y toca «Actualizar el reporte»: sigue habiendo una sola fila de hoy, actualizada.
+
+**Gastos** (tema Gastos):
+
+- **Compra por caja menor:** foto de una factura de menos de $100.000 → «Caja menor» → «Corregir campo» en algo → «Sí,
+  guardar». Revisa la fila en `Gastos`, la foto en Drive `Facturas/` y el saldo de la caja.
 - **Compra por encima del tope:** factura de más de $100.000 con «Caja menor» → debe pasar a «Pagó Carlos» y avisarte
   por privado.
-- **Reporte por notas** en el tema Reportes: manda una nota de voz. El bot responde «¿Quisiste decir esto?» con lo que
-  entendió (tareas del cronograma por número y el trabajo que no está en el cronograma aparte).
-  - «Sí»: la nota queda en la pestaña `Notas` y el bot arma el reporte del día con todas las notas confirmadas.
-  - «No»: pide una aclaración en texto u otro audio y vuelve a preguntar. «Descartar la nota» no guarda nada.
-  - Manda otra nota antes de responder: espera su turno. Guarda, manda otra y guarda otra vez: en `Reportes` sigue
-    habiendo una sola fila de hoy, actualizada.
-- La sección «Fotos» del reporte sale con «—» hasta la fase 4.
 - **Opcional:** un PDF de factura por tu privado y una compra sin factura (máximo $10.000 y una por día).
+
+La sección «Fotos» del reporte sale con «—» hasta la fase 4.
 
 ## Uso diario
 
@@ -236,6 +240,9 @@ Si cambias una semilla allá, cópiala aquí y vuelve a cargarla con `deno task 
 - `fotos_antes.json`: catálogo F01–F24 con encuadre, tareas e hitos.
 - `Gastos.csv` y `Pagos.csv`: lo pagado antes de la obra, con `cuenta_12M = no`.
 - `facturas_esperadas.csv`: los valores de las 4 facturas reales para la fase 2.
+- `Reportes.csv`: solo encabezados. Una fila por día: resumen, tareas terminadas (`02-05`), avance de la obra contra el
+  cronograma (`avance_obra_pct`, `avance_esperado_pct`, `desvio_pct`, ponderados por los días de cada tarea), lo que
+  sigue, lo esperado, compras, caja menor y el texto completo.
 - `Notas.csv`: solo encabezados. Cada nota confirmada del tema Reportes queda ahí: la transcripción y, en `resumen`, lo
   que el bot entendió y se confirmó con «Sí». El reporte del día se arma con `resumen`: si lo corriges en la hoja, la
   siguiente nota ya usa tu corrección.

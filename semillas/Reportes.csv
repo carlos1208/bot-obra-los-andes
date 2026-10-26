@@ -1,1 +1,1 @@
-fecha,hora,reportado_por,tareas_terminadas,tareas_avanzadas,avance_objetivo_pct,llego_esperado,no_llego,agua,novedades,novedades_detalle,para_manana,pares_antes_despues,compras_del_dia,saldo_caja_menor,texto_reporte
+fecha,hora,reportado_por,resumen_del_dia,tareas_terminadas,avance_obra_pct,avance_esperado_pct,desvio_pct,llego_esperado,no_llego,para_continuar,pares_antes_despues,compras_del_dia,saldo_caja_menor,texto_reporte

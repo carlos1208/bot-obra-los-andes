@@ -6,9 +6,6 @@ import type { Context } from "./context.ts";
 
 export const button = (text: string, data: string): Button => ({ text, callback_data: data });
 
-/** Opción de selección múltiple: ✅ si está elegida. */
-export const check = (label: string, on: boolean): string => `${on ? "✅" : "▫️"} ${label}`;
-
 /** Recorta un texto para que el botón se lea en el celular. */
 export function short(text: string, max = 38): string {
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;

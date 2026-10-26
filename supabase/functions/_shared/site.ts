@@ -170,26 +170,64 @@ export function tasksForWeek(tasks: Task[], iso: string): Task[] {
   return tasks.filter((t) => isOpen(t) && t.inicio && t.inicio <= saturday && t.fin >= monday);
 }
 
-/**
- * Avance del objetivo semanal: de las tareas (no tentativas) cuyo `fin` cae en la semana de la fecha,
- * cuántas están terminadas en la hoja o se marcan terminadas ahora.
- */
-export function weeklyObjective(
-  tasks: Task[],
-  iso: string,
-  finishedNow: string[] = [],
-): { done: number; total: number } {
-  const { monday, saturday } = weekRange(iso);
-  const due = tasks.filter((t) => !t.tentativo && t.fin >= monday && t.fin <= saturday);
-  const done = due.filter((t) => t.estado === "terminada" || finishedNow.includes(t.id)).length;
-  return { done, total: due.length };
+/** Días laborales entre dos fechas, ambas incluidas. */
+export function workDaysBetween(from: string, to: string, cfg: Config): number {
+  let n = 0;
+  for (let d = from; d <= to; d = addDays(d, 1)) if (isWorkDay(d, cfg)) n++;
+  return n;
 }
 
-/** Siguiente día laboral después de la fecha (salta domingos y festivos). */
-export function nextWorkDay(iso: string, cfg: Config): string {
-  let day = addDays(iso, 1);
-  for (let i = 0; i < 14 && !isWorkDay(day, cfg); i++) day = addDays(day, 1);
-  return day;
+/**
+ * Avance ponderado por los días de cada tarea (sin las tentativas): lo terminado y lo que el cronograma
+ * dice que debería ir terminado a la fecha (incluida). Una tarea en curso cuenta por los días laborales
+ * que ya pasaron de su rango. Porcentajes de 0 a 100.
+ */
+export function scheduleProgress(
+  tasks: Task[],
+  iso: string,
+  cfg: Config,
+  finishedNow: string[] = [],
+): { actual: number; expected: number } {
+  const counted = tasks.filter((t) => !t.tentativo && t.dias > 0 && t.inicio);
+  const total = counted.reduce((n, t) => n + t.dias, 0);
+  if (!total) return { actual: 0, expected: 0 };
+  const done = counted
+    .filter((t) => t.estado === "terminada" || finishedNow.includes(t.id))
+    .reduce((n, t) => n + t.dias, 0);
+  const due = counted.reduce((n, t) => {
+    if (iso < t.inicio) return n;
+    if (iso >= t.fin) return n + t.dias;
+    const span = workDaysBetween(t.inicio, t.fin, cfg);
+    return n + t.dias * (span ? workDaysBetween(t.inicio, iso, cfg) / span : 1);
+  }, 0);
+  return { actual: (100 * done) / total, expected: (100 * due) / total };
+}
+
+/** Lo que sigue: tareas sin terminar (ni tentativas) cuyas dependencias ya están terminadas, por fecha de inicio. */
+export function nextTasks(tasks: Task[], finishedNow: string[] = [], limit = 3): Task[] {
+  const done = new Set([...tasks.filter((t) => t.estado === "terminada").map((t) => t.id), ...finishedNow]);
+  return tasks
+    .filter((t) => !done.has(t.id) && !t.tentativo && t.depende_de.every((d) => done.has(d)))
+    .sort((a, b) => a.inicio.localeCompare(b.inicio))
+    .slice(0, limit);
+}
+
+/**
+ * Números de tareas escritos por el usuario: «2-5», «02 - 05», «2, 5 y Z1». Devuelve los ids del cronograma
+ * que encontró entre `candidates` (sin repetir, en el orden escrito) y lo que no encontró.
+ */
+export function parseTaskIds(text: string, candidates: string[]): { ids: string[]; unknown: string[] } {
+  const ids: string[] = [];
+  const unknown: string[] = [];
+  const tokens = text.toUpperCase().replace(/\bY\b/g, "-").split(/[\s,;\-–]+/).filter(Boolean);
+  for (const token of tokens) {
+    const id = /^\d+$/.test(token)
+      ? candidates.find((c) => /^\d+$/.test(c) && Number(c) === Number(token))
+      : candidates.find((c) => c.toUpperCase() === token);
+    if (!id) unknown.push(token);
+    else if (!ids.includes(id)) ids.push(id);
+  }
+  return { ids, unknown };
 }
 
 // --- Dinero ------------------------------------------------------------------

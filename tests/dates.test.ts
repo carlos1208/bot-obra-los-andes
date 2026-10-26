@@ -2,10 +2,10 @@ import { assertEquals } from "jsr:@std/assert@1.0.19";
 import { cellDate, parseDateInput, shortDate, todayISO } from "../supabase/functions/_shared/format.ts";
 import {
   isWorkDay,
-  nextWorkDay,
   parseWorkDays,
   readConfig,
   weekRange,
+  workDaysBetween,
   workWeek,
 } from "../supabase/functions/_shared/site.ts";
 import { seedRows } from "./_rows.ts";
@@ -87,7 +87,8 @@ Deno.test("fechas escritas al corregir un campo", () => {
   assertEquals(parseDateInput("el martes", today), null);
 });
 
-Deno.test("siguiente día laboral salta domingos y festivos", () => {
-  assertEquals(nextWorkDay("2026-10-28", cfg), "2026-10-29");
-  assertEquals(nextWorkDay("2026-10-31", cfg), "2026-11-03"); // dom 1 y lun 2 nov (festivo)
+Deno.test("días laborales entre dos fechas: lunes a sábado, sin festivos", () => {
+  assertEquals(workDaysBetween("2026-10-26", "2026-10-31", cfg), 6);
+  assertEquals(workDaysBetween("2026-10-26", "2026-11-07", cfg), 11); // dom 1 y lun 2 nov (festivo)
+  assertEquals(workDaysBetween("2026-11-01", "2026-11-01", cfg), 0);
 });
