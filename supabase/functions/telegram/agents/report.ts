@@ -1,18 +1,18 @@
 // Reporte diario (sección 6.2 del prompt), de dos formas:
 // - Con botones (/reporte): por secciones, con selección múltiple.
-// - Con notas: cada texto o nota de voz del tema Reportes se guarda en la pestaña Notas (transcripción y
-//   resumen) y el bot rearma un solo reporte con todas las notas del día. Si se contradicen, pregunta.
+// - Con notas: cada texto o nota de voz del tema Reportes lo lee Gemini y el bot pregunta «¿Quisiste decir
+//   esto?». Con «Sí» la nota va a la pestaña Notas y el bot rearma un solo reporte con todas las del día;
+//   con «No» pide una aclaración (texto u otro audio) y vuelve a preguntar.
 // El reporte se escribe solo con «Sí, guardar» y hay uno por día: guardarlo otra vez actualiza su fila.
-// Las notas se guardan sin confirmar (lo pidió Carlos): son la entrada del reporte, no el reporte.
 // Al guardar: fila en Reportes, estado en Tareas, llegó en Esperado y el resumen a Carlos por privado.
 
 import { claimStep, deleteSession, readSession, saveSession, type Session } from "../../_shared/db.ts";
 import { envNumber } from "../../_shared/env.ts";
 import {
-  type Conflict,
   type DayNote,
   extractDayReport,
-  type FreeReport,
+  readNote,
+  type ReportFields,
   type ReportOptions,
   summarizeNote,
 } from "../../_shared/extractors.ts";
@@ -34,6 +34,7 @@ import {
   readConfig,
   readTasks,
   type Row,
+  type Task,
   tasksForDay,
   tasksForWeek,
   weeklyObjective,
@@ -71,8 +72,6 @@ const OTHER_OPTION = { id: "o", label: "Otro" };
 const SHORT_NOTE = 150;
 /** Pestaña de las notas del día. */
 const NOTES = "Notas";
-/** Rondas de aclaraciones antes de dejar las incongruencias como aviso en la vista previa. */
-const MAX_ROUNDS = 2;
 
 type Status = "terminada" | "avanzó";
 
@@ -86,10 +85,28 @@ interface Expected {
   arrived?: boolean;
 }
 
+/** Nota recibida que espera su turno para la pregunta «¿Quisiste decir esto?». */
+interface QueuedNote {
+  key: string;
+  voice?: string;
+  text?: string;
+}
+
+/** Nota leída por Gemini, esperando «Sí» o «No». */
+interface PendingNote {
+  key: string;
+  kind: "voz" | "texto";
+  transcript: string;
+  /** Lo que entendió el bot, tal como se mostró: es lo que se confirma y se guarda. */
+  understood: string;
+}
+
 interface Data extends FlowBase {
   date: string;
   tasks: Option[];
   done: string[];
+  /** Trabajo hecho que no es una tarea del cronograma (sale de las notas). */
+  extraWork: string;
   status: Record<string, Status>;
   expected: Expected[];
   /** «No llegó» que ya se avisaron a Carlos. */
@@ -103,19 +120,15 @@ interface Data extends FlowBase {
   tomorrowDetail: string;
   /** Corrigiendo una sección: al terminarla vuelve a la vista previa. */
   fixing?: boolean;
-  /** Armado con las notas del día: cuántas (sin contar las aclaraciones). */
+  /** Armado con las notas del día: cuántas. */
   notes?: number;
-  /** Incongruencias por resolver y las respuestas dadas. */
-  conflicts?: Conflict[];
-  answers?: string[];
-  /** Preguntas ya respondidas: no se vuelven a hacer. */
-  answered?: string[];
-  /** Veces que se rearmó por aclaraciones. */
-  rounds?: number;
-  /** Incongruencias que quedaron sin resolver: se muestran en la vista previa. */
+  /** Contradicciones entre notas que vio Gemini: se avisan en la vista previa. */
   warnings?: string[];
-  /** Lo que encontró Gemini en la última armada (de paso, no se guarda). */
-  conflictsFound?: Conflict[];
+  /** Nota por confirmar y las que esperan turno. */
+  pending?: PendingNote;
+  queue?: QueuedNote[];
+  /** Borrador con botones sin guardar, para no perderlo si llega una nota. */
+  draft?: string;
 }
 
 // --- Sesión y mensajes ---------------------------------------------------------
@@ -143,6 +156,11 @@ function todayReport(rows: Row[], date: string): Row | undefined {
 const idList = (v: unknown) => String(v ?? "").split(/[,;\s]+/).filter(Boolean);
 
 async function baseData(ctx: Context): Promise<Data> {
+  return (await loadDay(ctx)).data;
+}
+
+/** Datos del día y todas las tareas del cronograma, leídos de la hoja en este momento. */
+async function loadDay(ctx: Context): Promise<{ data: Data; tasks: Task[] }> {
   const date = todayISO();
   const { Config, Tareas, Esperado, Reportes } = await readTabs(["Config", "Tareas", "Esperado", "Reportes"]);
   const cfg = readConfig(Config);
@@ -155,11 +173,12 @@ async function baseData(ctx: Context): Promise<Data> {
     ...idList(saved?.tareas_terminadas),
     ...idList(saved?.tareas_avanzadas),
   ]);
-  return {
+  const data: Data = {
     hilo: ctx.threadId ?? null,
     date,
     tasks: tasks.filter((t) => listed.has(t.id)).map(option),
     done: [],
+    extraWork: "",
     status: {},
     expected: Esperado.filter((r) => cellDate(r.fecha) === date).map((r) => ({ label: String(r.quien_o_que) })),
     notified: [],
@@ -171,6 +190,7 @@ async function baseData(ctx: Context): Promise<Data> {
     tomorrow: [],
     tomorrowDetail: "",
   };
+  return { data, tasks };
 }
 
 /** /reporte: empieza el reporte con botones. */
@@ -296,16 +316,6 @@ async function showStep(ctx: Context, data: Data, step: string, editId?: number)
     case "manana_otro":
       text = "Para mañana: escribe o manda una nota de voz con lo que se necesita.";
       break;
-    case "incongruencia": {
-      const i = data.answers?.length ?? 0;
-      const c = data.conflicts![i];
-      text = `<b>Las notas no coinciden (${i + 1} de ${data.conflicts!.length})</b>\n${escapeHtml(c.question)}`;
-      keyboard = [
-        ...c.options.map((o, j) => [button(short(o), `rep:k:${i}:${j}`)]),
-        [button("Mando otra nota", `rep:k:${i}:n`)],
-      ];
-      break;
-    }
     default:
       return await showPreview(ctx, data, editId);
   }
@@ -339,7 +349,8 @@ function nextStep(data: Data, from: string): string {
 // --- Texto del reporte ---------------------------------------------------------
 
 function doneText(data: Data): string {
-  return data.done.map((id) => `${id} ${data.status[id] ?? "avanzó"}`).join(", ") || "nada de la lista";
+  const tasks = data.done.map((id) => `${id} ${data.status[id] ?? "avanzó"}`).join(", ");
+  return [tasks, data.extraWork].filter(Boolean).join("; ") || "nada";
 }
 
 function expectedText(data: Data): string {
@@ -547,8 +558,9 @@ export async function onButton(ctx: Context): Promise<void> {
         value === "hecho" && !data.tasks.length ? "compras" : value,
       );
     }
-    case "incongruencia/k":
-      return await answerConflict(ctx, data, Number(value), extra, messageId);
+    case "nota/q":
+    case "aclarar/q":
+      return await answerNote(ctx, data, value, messageId);
   }
   await answerCallback(cb.id, "Ese botón ya no está activo.");
 }
@@ -592,8 +604,9 @@ export async function resume(ctx: Context, session: Session<Data>): Promise<void
     await say(ctx, data, `Anotado: ${escapeHtml(note)}`);
     return await showStep(ctx, data, nextStep(data, step));
   }
-  // Con la vista previa o una pregunta abierta, el texto o la voz es una nota más del día.
-  if (step === "vista" || step === "incongruencia") return await receiveNote(ctx, session);
+  if (step === "aclarar") return await clarify(ctx, data);
+  // Con la vista previa abierta o una nota por confirmar, el texto o la voz es una nota más del día.
+  if (step === "vista" || step === "nota") return await receiveNote(ctx, session);
   await ctx.reply("Toca los botones de arriba, o escribe /reporte para empezar de nuevo.");
 }
 
@@ -604,91 +617,176 @@ async function noteExists(key: string): Promise<boolean> {
   return Notas.some((r) => String(r.mensaje_id) === key);
 }
 
-async function recordNote(
-  ctx: Context,
-  date: string,
-  kind: string,
-  transcript: string,
-  summary: string,
-  key: string,
-): Promise<void> {
-  await appendRow(NOTES, {
-    fecha: date,
-    hora: bogotaTime(),
-    reportado_por: roleLabel(ctx),
-    tipo: kind,
-    transcripcion: transcript,
-    resumen: summary,
-    mensaje_id: key,
-  });
+/** Lo que Gemini puede elegir: las tareas sin terminar de todo el cronograma (el trabajo puede ir adelantado
+ * o atrasado), más las del reporte de hoy. */
+function reportOptions(data: Data, tasks: Task[]): ReportOptions {
+  const open = tasks.filter((t) => t.estado !== "terminada" || data.tasks.some((x) => x.id === t.id));
+  const when = (t: Task) => t.inicio === t.fin ? shortDate(t.inicio) : `${shortDate(t.inicio)} – ${shortDate(t.fin)}`;
+  return {
+    tasks: open.map((t) => ({ id: t.id, label: t.tarea, when: t.inicio ? when(t) : undefined })),
+    expected: data.expected.map((e) => e.label),
+    water: WATER,
+    news: NEWS,
+    tomorrow: [...open.map((t) => ({ id: t.id, label: t.tarea })), DECISION],
+  };
 }
 
-/** Texto o nota de voz en el tema Reportes: va a Notas y se rearma el reporte del día. */
+/** Lo que entendió de la nota, en frases (es lo que se confirma y se guarda en Notas). */
+function readingText(r: ReportFields, options: ReportOptions): string {
+  const label = (id: string) => options.tasks.find((t) => t.id === id)?.label;
+  const lines: string[] = [];
+  for (const t of r.tasks) if (label(t.id)) lines.push(`Se hizo: ${t.id} ${label(t.id)} – ${t.status}`);
+  if (r.extra_work) lines.push(`Otro trabajo: ${r.extra_work}`);
+  for (const e of r.expected) lines.push(`${e.arrived ? "Llegó" : "No llegó"}: ${e.item}`);
+  if (r.water && WATER.includes(r.water)) {
+    const detail = r.water_detail ? `: ${r.water_detail}` : "";
+    lines.push(`Agua (Triple A): ${r.water === OTHER ? r.water_detail || OTHER : `${r.water}${detail}`}`);
+  }
+  const news = [...r.news.filter((n) => NEWS.includes(n) && n !== OTHER), ...(r.news_detail ? [r.news_detail] : [])];
+  if (news.length) lines.push(`Novedades: ${news.join(", ")}`);
+  const tomorrow = r.tomorrow.flatMap((id) =>
+    id === DECISION.id ? [DECISION.label] : label(id) ? [`${id} ${label(id)}`] : []
+  );
+  if (r.tomorrow_detail) tomorrow.push(r.tomorrow_detail);
+  if (tomorrow.length) lines.push(`Para mañana: ${tomorrow.join(", ")}`);
+  return lines.join("\n");
+}
+
+/** Texto o nota de voz en el tema Reportes: Gemini la lee y el bot pregunta si entendió bien. */
 export async function receiveNote(ctx: Context, session?: Session<Data> | null): Promise<void> {
   const m = ctx.message!;
   const text = m.text?.trim() ?? "";
   if (!m.voice && !text) return;
-  const key = String(m.message_id);
-  // En un reintento (Gemini sin cuota) la nota ya puede estar guardada.
-  if (!(await noteExists(key))) {
-    let transcript = text;
-    let summary = text;
-    if (m.voice) {
-      const { bytes } = await downloadFile(m.voice.file_id);
-      ({ transcript, summary } = await summarizeNote({ mimeType: m.voice.mime_type ?? "audio/ogg", bytes }));
-    } else if (text.length > SHORT_NOTE) {
-      summary = (await summarizeNote(text)).summary;
+  const note: QueuedNote = { key: String(m.message_id), ...(m.voice ? { voice: m.voice.file_id } : { text }) };
+  const old = session?.datos;
+  if (session?.paso === "nota" && old?.pending) {
+    // Ya hay una nota esperando el «Sí» o el «No»: esta espera su turno.
+    if (old.pending.key !== note.key && !old.queue?.some((q) => q.key === note.key)) {
+      await save(ctx, "nota", { ...old, queue: [...(old.queue ?? []), note] });
     }
-    await recordNote(ctx, todayISO(), m.voice ? "voz" : "texto", transcript, summary, key);
+    await ctx.reply("Recibida. Primero responde si entendí bien la nota anterior y luego te muestro esta.");
+    return;
   }
-  const wait = await ctx.reply("Nota anotada. Armando el reporte del día…");
-  await buildFromNotes(ctx, wait.message_id, session?.datos, 0);
+  // Un borrador con botones sin guardar no se pierde: entra como base del reporte.
+  const draft = session?.paso === "vista" && old && !old.notes ? reportText(old, await sheetFacts(old)) : old?.draft;
+  await askAboutNote(ctx, note, [], undefined, draft);
 }
 
-const reportOptions = (data: Data): ReportOptions => ({
-  tasks: data.tasks,
-  expected: data.expected.map((e) => e.label),
-  water: WATER,
-  news: NEWS,
-  tomorrow: data.tomorrowOptions.filter((o) => o.id !== OTHER_OPTION.id),
-});
+/** Lee la nota (o su aclaración) con Gemini y pregunta «¿Quisiste decir esto?». */
+async function askAboutNote(
+  ctx: Context,
+  note: QueuedNote,
+  queue: QueuedNote[],
+  original?: PendingNote,
+  draft?: string,
+): Promise<void> {
+  const wait = await ctx.reply(original ? "Leyendo la aclaración…" : "Leyendo la nota…");
+  const { data, tasks } = await loadDay(ctx);
+  const options = reportOptions(data, tasks);
+  const input = note.voice ? { mimeType: "audio/ogg", bytes: (await downloadFile(note.voice)).bytes } : note.text!;
+  const reading = await readNote(input, original?.transcript ?? null, options);
+  const heard = note.text ?? reading.transcript;
+  const understood = readingText(reading, options);
+  const pending: PendingNote = {
+    key: original?.key ?? note.key,
+    kind: original?.kind ?? (note.voice ? "voz" : "texto"),
+    transcript: original ? `${original.transcript}\nAclaración: ${heard}` : heard,
+    understood,
+  };
+  const text = [
+    ...(note.voice ? [`Escuché: «${escapeHtml(reading.transcript)}»`, ""] : []),
+    "<b>¿Quisiste decir esto?</b>",
+    escapeHtml(understood || "No encontré nada para el reporte."),
+  ].join("\n");
+  await editMessageText(ctx.chatId, wait.message_id, text, [[button("Sí", "rep:q:1"), button("No", "rep:q:0")]]);
+  await save(ctx, "nota", { ...data, pending, queue, draft, msg: wait.message_id });
+}
 
-/** Arma el reporte con todas las notas de hoy y el reporte guardado (o el borrador con botones). */
-async function buildFromNotes(ctx: Context, editId: number, old: Data | undefined, rounds: number): Promise<void> {
-  const data = await baseData(ctx);
+/** «Sí», «No» o «Descartar nota» sobre la nota que se está confirmando. */
+async function answerNote(ctx: Context, data: Data, choice: string, messageId: number): Promise<void> {
+  const cb = ctx.callback!;
+  const pending = data.pending;
+  if (!pending) return await answerCallback(cb.id, "Ese botón ya no está activo.");
+  await answerCallback(cb.id);
+  const understood = pending.understood;
+
+  if (choice === "0") {
+    await editMessageText(ctx.chatId, messageId, `${escapeHtml(understood || "—")}\n\nNo era eso.`);
+    const m = await say(ctx, data, "¿Quieres aclarar con texto u otro audio? Mándalo aquí.", [[
+      button("Descartar la nota", "rep:q:x"),
+    ]]);
+    await save(ctx, "aclarar", { ...data, msg: m });
+    return;
+  }
+  if (choice === "x") {
+    await editMessageText(ctx.chatId, messageId, "Nota descartada.");
+  } else {
+    // En un reintento (Gemini sin cuota al armar el reporte) la nota ya puede estar guardada.
+    if (!(await noteExists(pending.key))) {
+      await appendRow(NOTES, {
+        fecha: data.date,
+        hora: bogotaTime(),
+        reportado_por: roleLabel(ctx),
+        tipo: pending.kind,
+        transcripcion: pending.transcript,
+        resumen: understood,
+        mensaje_id: pending.key,
+      });
+    }
+    await editMessageText(ctx.chatId, messageId, `✅ Nota guardada:\n${escapeHtml(understood || "—")}`);
+  }
+  const [next, ...rest] = data.queue ?? [];
+  if (next) return await askAboutNote(ctx, next, rest, undefined, data.draft);
+  const { Notas } = await readTabs([NOTES]);
+  if (!Notas.some((r) => cellDate(r.fecha) === data.date)) {
+    await deleteSession(ctx.chatId, ctx.userId);
+    return;
+  }
+  const wait = await say(ctx, data, "Armando el reporte del día…");
+  await buildFromNotes(ctx, wait, data.draft);
+}
+
+/** Aclaración (texto u otro audio) de la nota que no se entendió bien. */
+async function clarify(ctx: Context, data: Data): Promise<void> {
+  const m = ctx.message!;
+  const text = m.text?.trim() ?? "";
+  if (!data.pending || (!m.voice && !text)) {
+    await ctx.reply("Manda la aclaración en texto o en una nota de voz.");
+    return;
+  }
+  if (data.msg) await editKeyboard(ctx.chatId, data.msg);
+  const clarification: QueuedNote = { key: String(m.message_id), ...(m.voice ? { voice: m.voice.file_id } : { text }) };
+  await askAboutNote(ctx, clarification, data.queue ?? [], data.pending, data.draft);
+}
+
+/** Arma el reporte con todas las notas confirmadas de hoy y el reporte guardado. */
+async function buildFromNotes(ctx: Context, editId: number, draft?: string): Promise<void> {
+  const { data, tasks } = await loadDay(ctx);
   const { Notas, Reportes } = await readTabs([NOTES, "Reportes"]);
   const notes: DayNote[] = Notas.filter((r) => cellDate(r.fecha) === data.date).map((r) => ({
     hora: String(r.hora ?? ""),
     quien: String(r.reportado_por ?? ""),
-    tipo: String(r.tipo ?? ""),
-    texto: String(r.transcripcion ?? ""),
+    texto: String(r.resumen || r.transcripcion || ""),
   }));
-  const previous: string[] = [];
   const saved = todayReport(Reportes, data.date);
-  if (saved?.texto_reporte) previous.push(String(saved.texto_reporte));
-  if (old && !old.notes) previous.push(reportText(old, await sheetFacts(old))); // borrador con botones
-
-  applyReport(data, await extractDayReport(notes, previous, reportOptions(data)));
-  data.notes = notes.filter((n) => normalize(n.tipo) !== "aclaracion").length;
-  data.answered = old?.answered ?? [];
-  data.rounds = rounds;
-  const open = data.conflictsFound!.filter((c) => !data.answered!.includes(normalize(c.question)));
-  delete data.conflictsFound;
-  if (open.length && rounds < MAX_ROUNDS) {
-    await showStep(ctx, { ...data, conflicts: open, answers: [] }, "incongruencia", editId);
-    return;
-  }
-  await showPreview(ctx, { ...data, warnings: open.map((c) => c.question) }, editId);
+  const previous = [saved?.texto_reporte, draft].filter((p): p is string => Boolean(p)).map(String);
+  const options = reportOptions(data, tasks);
+  const got = await extractDayReport(notes, previous, options);
+  applyReport(data, got, options);
+  await showPreview(ctx, { ...data, notes: notes.length, warnings: got.warnings ?? [] }, editId);
 }
 
 /** Pasa lo que armó Gemini a los datos del reporte (descarta lo que no está en las listas). */
-function applyReport(data: Data, got: FreeReport & { conflicts: Conflict[] }): void {
-  const validTask = new Set(data.tasks.map((t) => t.id));
+function applyReport(data: Data, got: ReportFields, options: ReportOptions): void {
+  const label = (id: string) => options.tasks.find((t) => t.id === id)?.label;
   for (const t of got.tasks) {
-    if (!validTask.has(t.id) || data.done.includes(t.id)) continue;
+    const name = label(t.id);
+    if (!name || data.done.includes(t.id)) continue;
+    if (!data.tasks.some((x) => x.id === t.id)) data.tasks.push({ id: t.id, label: name });
     data.done.push(t.id);
     data.status[t.id] = t.status === "terminada" ? "terminada" : "avanzó";
   }
+  data.extraWork = got.extra_work ?? "";
   for (const e of got.expected) {
     const item = data.expected.find((x) => normalize(x.label) === normalize(e.item));
     if (item) item.arrived = e.arrived;
@@ -697,49 +795,15 @@ function applyReport(data: Data, got: FreeReport & { conflicts: Conflict[] }): v
   data.waterDetail = got.water_detail ?? "";
   data.news = got.news.filter((n) => NEWS.includes(n));
   data.newsDetail = got.news_detail ?? "";
-  const validTomorrow = new Set(data.tomorrowOptions.map((o) => o.id));
-  data.tomorrow = got.tomorrow.filter((id) => validTomorrow.has(id));
+  data.tomorrow = [];
+  for (const id of got.tomorrow) {
+    const name = id === DECISION.id ? DECISION.label : label(id);
+    if (!name || data.tomorrow.includes(id)) continue;
+    if (!data.tomorrowOptions.some((o) => o.id === id)) data.tomorrowOptions.splice(-2, 0, { id, label: name });
+    data.tomorrow.push(id);
+  }
   data.tomorrowDetail = got.tomorrow_detail ?? "";
   if (data.tomorrowDetail && !data.tomorrow.includes(OTHER_OPTION.id)) data.tomorrow.push(OTHER_OPTION.id);
-  data.conflictsFound = got.conflicts.filter((c) => c.question && c.options.length >= 2);
-}
-
-/** Botón de una incongruencia: una versión, o «Mando otra nota». */
-async function answerConflict(
-  ctx: Context,
-  data: Data,
-  index: number,
-  choice: string,
-  messageId: number,
-): Promise<void> {
-  const cb = ctx.callback!;
-  const answers = data.answers ?? [];
-  const c = data.conflicts?.[index];
-  const option = choice === "n" ? "" : c?.options[Number(choice)];
-  if (!c || index !== answers.length || option === undefined) {
-    await answerCallback(cb.id, "Ese botón ya no está activo.");
-    return;
-  }
-  await answerCallback(cb.id);
-  if (option) {
-    answers.push(`${c.question} → ${option}`);
-    data.answered = [...(data.answered ?? []), normalize(c.question)];
-    await closeSection(ctx, messageId, `${escapeHtml(c.question)}\n✅ ${escapeHtml(option)}`);
-  }
-  // Las respuestas quedan en Notas como aclaración: así cuentan cada vez que se rearma el reporte.
-  const key = `a${messageId}`;
-  if (answers.length && (!option || answers.length === data.conflicts!.length) && !(await noteExists(key))) {
-    const text = `Aclaración: ${answers.join("; ")}`;
-    await recordNote(ctx, data.date, "aclaración", text, text, key);
-  }
-  if (!option) {
-    await closeSection(ctx, messageId, `${escapeHtml(c.question)}\nManda una nota con la aclaración.`);
-    await save(ctx, "incongruencia", { ...data, answers, msg: undefined });
-    return;
-  }
-  if (answers.length < data.conflicts!.length) return await showStep(ctx, { ...data, answers }, "incongruencia");
-  const wait = await say(ctx, data, "Armando el reporte con la aclaración…");
-  await buildFromNotes(ctx, wait, data, (data.rounds ?? 0) + 1);
 }
 
 /** Vuelve al reporte después de «Agregar compra» (o de un gasto hecho a mitad del reporte). */

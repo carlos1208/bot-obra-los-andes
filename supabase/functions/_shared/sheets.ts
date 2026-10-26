@@ -99,7 +99,9 @@ export async function appendRow(tab: string, values: Record<string, unknown>): P
   const headers = await readHeaders(tab);
   for (const column of Object.keys(values)) columnIndex(tab, headers, column);
   const row = headers.map((h) => toCell(h, values[h]));
-  const q = new URLSearchParams({ valueInputOption: "USER_ENTERED", insertDataOption: "INSERT_ROWS" });
+  // Sin INSERT_ROWS: insertar filas copia el formato de la fila de arriba (en una pestaña vacía, el del
+  // encabezado). Así la fila nueva usa el formato de la columna (fechas, pesos).
+  const q = new URLSearchParams({ valueInputOption: "USER_ENTERED" });
   await sheetsFetch(`/values/${encodeURIComponent(`'${tab}'!A1`)}:append?${q}`, {
     method: "POST",
     body: JSON.stringify({ values: [row] }),

@@ -189,10 +189,12 @@ no hay tareas en la semana.
   campo» en algo → «Sí, guardar». Revisa la fila en `Gastos`, la foto en Drive `Facturas/` y el saldo de la caja.
 - **Compra por encima del tope:** factura de más de $100.000 con «Caja menor» → debe pasar a «Pagó Carlos» y avisarte
   por privado.
-- **Reporte por notas** en el tema Reportes: manda 2 o 3 notas de voz o textos. Cada una queda en la pestaña `Notas` y
-  el bot rearma un solo reporte con todas. Haz que dos notas se contradigan: debe preguntar con botones antes de la
-  vista previa. Guarda, manda otra nota y guarda otra vez: en `Reportes` sigue habiendo una sola fila de hoy,
-  actualizada.
+- **Reporte por notas** en el tema Reportes: manda una nota de voz. El bot responde «¿Quisiste decir esto?» con lo que
+  entendió (tareas del cronograma por número y el trabajo que no está en el cronograma aparte).
+  - «Sí»: la nota queda en la pestaña `Notas` y el bot arma el reporte del día con todas las notas confirmadas.
+  - «No»: pide una aclaración en texto u otro audio y vuelve a preguntar. «Descartar la nota» no guarda nada.
+  - Manda otra nota antes de responder: espera su turno. Guarda, manda otra y guarda otra vez: en `Reportes` sigue
+    habiendo una sola fila de hoy, actualizada.
 - La sección «Fotos» del reporte sale con «—» hasta la fase 4.
 - **Opcional:** un PDF de factura por tu privado y una compra sin factura (máximo $10.000 y una por día).
 
@@ -234,6 +236,8 @@ Si cambias una semilla allá, cópiala aquí y vuelve a cargarla con `deno task 
 - `fotos_antes.json`: catálogo F01–F24 con encuadre, tareas e hitos.
 - `Gastos.csv` y `Pagos.csv`: lo pagado antes de la obra, con `cuenta_12M = no`.
 - `facturas_esperadas.csv`: los valores de las 4 facturas reales para la fase 2.
-- `Notas.csv`: solo encabezados. Cada texto o nota de voz del tema Reportes queda ahí con su transcripción y resumen.
+- `Notas.csv`: solo encabezados. Cada nota confirmada del tema Reportes queda ahí: la transcripción y, en `resumen`, lo
+  que el bot entendió y se confirmó con «Sí». El reporte del día se arma con `resumen`: si lo corriges en la hoja, la
+  siguiente nota ya usa tu corrección.
 
 El mapa de la carpeta del Drive está en `CLAUDE.md`.

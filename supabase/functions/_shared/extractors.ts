@@ -1,7 +1,7 @@
 // Extracciones con Gemini: cada una con sus instrucciones y su esquema JSON.
 // Las usan los agentes del bot y el script de validación de la fase 2.
 
-import { generateJson, type InlineFile } from "./gemini.ts";
+import { generateJson, type InlineFile, type Part } from "./gemini.ts";
 
 export interface Invoice {
   supplier: string;
@@ -126,15 +126,18 @@ export function extractNoInvoicePurchase(
 
 /** Opciones del reporte diario que Gemini puede elegir (salen de la hoja y del flujo con botones). */
 export interface ReportOptions {
-  tasks: { id: string; label: string }[];
+  /** Tareas del cronograma que no están terminadas; `when` son sus fechas. */
+  tasks: { id: string; label: string; when?: string }[];
   expected: string[];
   water: string[];
   news: string[];
   tomorrow: { id: string; label: string }[];
 }
 
-export interface FreeReport {
+/** Lo que dice una nota (o el día) en la estructura del reporte. */
+export interface ReportFields {
   tasks: { id: string; status: "terminada" | "avanzó" }[];
+  extra_work: string | null;
   expected: { item: string; arrived: boolean }[];
   water: string | null;
   water_detail: string | null;
@@ -144,108 +147,146 @@ export interface FreeReport {
   tomorrow_detail: string | null;
 }
 
-/** Dos notas que se contradicen: una pregunta corta con las versiones posibles. */
-export interface Conflict {
-  question: string;
-  options: string[];
+export interface NoteReading extends ReportFields {
+  transcript: string;
 }
 
-export interface DayReport extends FreeReport {
-  conflicts: Conflict[];
+export interface DayReport extends ReportFields {
+  warnings: string[];
 }
 
-/** Nota del día como se guarda en la pestaña Notas. */
+/** Nota del día como está en la pestaña Notas. */
 export interface DayNote {
   hora: string;
   quien: string;
-  tipo: string;
   texto: string;
 }
 
-const DAY_REPORT_INSTRUCTIONS =
-  `Combinas en un solo reporte diario todas las notas del día de una obra (texto o transcripciones de notas de voz, en español de Colombia), en orden de hora. Si hay un reporte anterior, es la base y las notas lo actualizan.
-Usa solo lo que dicen las notas y el reporte anterior: lo que nadie menciona queda vacío o null. No inventes.
-- Si una nota posterior corrige a una anterior (dice que corrige, aclara o que algo cambió), vale la más reciente.
-- Las notas de tipo «aclaración» resuelven las incongruencias: vale la aclaración.
-- conflicts: solo cuando dos notas se contradicen sin que la posterior diga que corrige. Una pregunta corta y de 2 a 4 opciones cortas con las versiones. Si no hay, lista vacía. En los campos, deja la versión más reciente.
-- tasks: tareas de la lista que se trabajaron hoy. status «terminada» si se terminó o quedó lista; «avanzó» si se trabajó sin terminar.
+const FIELD_RULES =
+  `- tasks: solo tareas de la lista que sean claramente el trabajo que se describe. status «terminada» si se terminó o quedó lista; «avanzó» si se trabajó sin terminar. Si no es claro, no la pongas.
+- extra_work: el trabajo hecho que no es claramente una tarea de la lista, en frases cortas; null si no hay. No fuerces una tarea de la lista.
 - expected: de lo esperado hoy, lo que llegó (arrived true) o no llegó (arrived false).
-- water: la opción que mejor describe la novedad del agua con Triple A. water_detail: el detalle (por ejemplo la fecha) o null.
-- news: las novedades que aplican. news_detail: resumen corto de las novedades, o null.
+- water: solo si se habla del agua o de Triple A: la opción que mejor encaja. water_detail: el detalle (por ejemplo la fecha) o null.
+- news: solo novedades que se mencionen. «Sin novedad» solo si lo dicen. Si no se habla de novedades, lista vacía. news_detail: resumen corto o null.
 - tomorrow: lo que se necesita mañana, de la lista. tomorrow_detail: lo que pidan y no esté en la lista, o null.`;
 
-/** Arma el reporte del día con todas las notas (y el reporte anterior, si hay). */
+function contextText(options: ReportOptions): string {
+  return [
+    "Tareas del cronograma que no están terminadas:",
+    ...options.tasks.map((t) => `- ${t.id}: ${t.label}${t.when ? ` (${t.when})` : ""}`),
+    "Esperado hoy:",
+    ...(options.expected.length ? options.expected.map((e) => `- ${e}`) : ["- (nada)"]),
+    "Lo que se puede necesitar mañana:",
+    ...options.tomorrow.map((t) => `- ${t.id}: ${t.label}`),
+  ].join("\n");
+}
+
+function fieldsSchema(options: ReportOptions): Record<string, unknown> {
+  return {
+    tasks: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: oneOf(options.tasks.map((t) => t.id), "Número de la tarea"),
+          status: { type: "string", enum: ["terminada", "avanzó"] },
+        },
+        required: ["id", "status"],
+      },
+    },
+    extra_work: { type: ["string", "null"], description: "Trabajo hecho que no es una tarea de la lista" },
+    expected: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { item: oneOf(options.expected, "Lo esperado"), arrived: { type: "boolean" } },
+        required: ["item", "arrived"],
+      },
+    },
+    water: { anyOf: [oneOf(options.water, "Novedad del agua"), { type: "null" }] },
+    water_detail: { type: ["string", "null"] },
+    news: { type: "array", items: oneOf(options.news, "Novedad") },
+    news_detail: { type: ["string", "null"] },
+    tomorrow: { type: "array", items: oneOf(options.tomorrow.map((t) => t.id), "Lo que se necesita mañana") },
+    tomorrow_detail: { type: ["string", "null"] },
+  };
+}
+
+const FIELDS = [
+  "tasks",
+  "extra_work",
+  "expected",
+  "water",
+  "water_detail",
+  "news",
+  "news_detail",
+  "tomorrow",
+  "tomorrow_detail",
+];
+
+const READ_NOTE_INSTRUCTIONS =
+  `Lees una nota de la obra (texto o nota de voz, en español de Colombia) para el reporte diario.
+- transcript: lo que dice la nota, palabra por palabra. Si hay una aclaración, solo lo que dice la aclaración.
+- Si hay una nota original y una aclaración, la aclaración corrige o completa la original: los campos quedan como resultan después de aclarar.
+Usa solo lo que dice. No inventes.
+${FIELD_RULES}`;
+
+/** Lee una nota (o su aclaración) para preguntar «¿Quisiste decir esto?». */
+export function readNote(
+  input: InlineFile | string,
+  original: string | null,
+  options: ReportOptions,
+  model?: string,
+): Promise<NoteReading> {
+  const audio = typeof input !== "string";
+  const label = original ? "Aclaración" : "Nota";
+  const parts: Part[] = [
+    contextText(options),
+    ...(original ? [`Nota original: ${original}`] : []),
+    audio ? `${label} en esta nota de voz:` : `${label}: ${input}`,
+    ...(audio ? [input] : []),
+  ];
+  return generateJson<NoteReading>({
+    instructions: READ_NOTE_INSTRUCTIONS,
+    parts,
+    schema: {
+      type: "object",
+      properties: { transcript: { type: "string" }, ...fieldsSchema(options) },
+      required: ["transcript", ...FIELDS],
+    },
+    model,
+  });
+}
+
+const DAY_REPORT_INSTRUCTIONS =
+  `Combinas en un solo reporte diario las notas del día de una obra, ya confirmadas por quien reporta, en orden de hora. Si hay un reporte anterior, es la base y las notas lo actualizan.
+Usa solo lo que dicen. No inventes.
+- Las notas se suman: avanzar por partes en el mismo trabajo no es contradicción.
+- Si una nota posterior corrige a una anterior, vale la más reciente.
+- warnings: solo contradicciones claras que no se explican (una nota dice que algo pasó y otra que no, sin decir que corrige). Una frase corta por cada una; si no hay, lista vacía.
+${FIELD_RULES}`;
+
+/** Arma el reporte del día con las notas confirmadas (y el reporte anterior, si hay). */
 export function extractDayReport(
   notes: DayNote[],
   previous: string[],
   options: ReportOptions,
   model?: string,
 ): Promise<DayReport> {
-  const context = [
-    "Tareas de la semana:",
-    ...options.tasks.map((t) => `- ${t.id}: ${t.label}`),
-    "Esperado hoy:",
-    ...(options.expected.length ? options.expected.map((e) => `- ${e}`) : ["- (nada)"]),
-    "Lo que se puede necesitar mañana:",
-    ...options.tomorrow.map((t) => `- ${t.id}: ${t.label}`),
-  ].join("\n");
-  const schema = {
-    type: "object",
-    properties: {
-      tasks: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            id: oneOf(options.tasks.map((t) => t.id), "Número de la tarea"),
-            status: { type: "string", enum: ["terminada", "avanzó"] },
-          },
-          required: ["id", "status"],
-        },
-      },
-      expected: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: { item: oneOf(options.expected, "Lo esperado"), arrived: { type: "boolean" } },
-          required: ["item", "arrived"],
-        },
-      },
-      water: { anyOf: [oneOf(options.water, "Novedad del agua"), { type: "null" }] },
-      water_detail: { type: ["string", "null"] },
-      news: { type: "array", items: oneOf(options.news, "Novedad") },
-      news_detail: { type: ["string", "null"] },
-      tomorrow: { type: "array", items: oneOf(options.tomorrow.map((t) => t.id), "Lo que se necesita mañana") },
-      tomorrow_detail: { type: ["string", "null"] },
-      conflicts: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            question: { type: "string", description: "Pregunta corta sobre la contradicción" },
-            options: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 4 },
-          },
-          required: ["question", "options"],
-        },
-      },
-    },
-    required: [
-      "tasks",
-      "expected",
-      "water",
-      "water_detail",
-      "news",
-      "news_detail",
-      "tomorrow",
-      "tomorrow_detail",
-      "conflicts",
-    ],
-  };
   const parts = [
-    context,
+    contextText(options),
     ...previous.map((p) => `Reporte anterior:\n${p}`),
     "Notas de hoy:",
-    ...notes.map((n, i) => `${i + 1}. [${n.hora}, ${n.quien}, ${n.tipo}] ${n.texto}`),
+    ...notes.map((n, i) => `${i + 1}. [${n.hora}, ${n.quien}] ${n.texto}`),
   ];
-  return generateJson<DayReport>({ instructions: DAY_REPORT_INSTRUCTIONS, parts, schema, model });
+  return generateJson<DayReport>({
+    instructions: DAY_REPORT_INSTRUCTIONS,
+    parts,
+    schema: {
+      type: "object",
+      properties: { ...fieldsSchema(options), warnings: { type: "array", items: { type: "string" } } },
+      required: [...FIELDS, "warnings"],
+    },
+    model,
+  });
 }

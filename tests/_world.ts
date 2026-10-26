@@ -72,6 +72,9 @@ export async function resetSheet(): Promise<void> {
 }
 await resetSheet();
 
+/** Consultas de append a Sheets (para revisar sus opciones). */
+export const appends: string[] = [];
+
 /** Respuestas de Gemini en orden: un objeto (JSON de la respuesta) o { status } para un error HTTP. */
 export const gemini = {
   replies: [] as unknown[],
@@ -158,6 +161,7 @@ function sheets(url: URL, init: RequestInit): Response {
   }
   const append = path.match(/\/values\/'([^']+)'!A1:append$/);
   if (append) {
+    appends.push(url.search);
     const row = JSON.parse(String(init.body)).values[0].map(entered);
     sheet[append[1]].push(row);
     return Response.json({});

@@ -3,6 +3,7 @@
 // (varias notas, incongruencias, uno por día).
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 import {
+  appends,
   BROTHER,
   buttons,
   CARLOS,
@@ -134,9 +135,10 @@ Deno.test("reporte completo con botones, una compra en medio y guardado", async 
   assertEquals((tables.sesiones ?? []).length, 0);
 });
 
-/** Respuesta de Gemini al armar el reporte del día (lo que no se pasa queda vacío). */
-const day = (over: Record<string, unknown> = {}) => ({
+/** Lo que Gemini lee de una nota o arma del día (lo que no se pasa queda vacío). */
+const fields = (over: Record<string, unknown> = {}) => ({
   tasks: [],
+  extra_work: null,
   expected: [],
   water: null,
   water_detail: null,
@@ -144,125 +146,150 @@ const day = (over: Record<string, unknown> = {}) => ({
   news_detail: null,
   tomorrow: [],
   tomorrow_detail: null,
-  conflicts: [],
   ...over,
 });
-const dayCalls = () =>
-  gemini.calls.filter((c) => "conflicts" in c.body.generationConfig.responseFormat.text.schema.properties);
+const reading = (transcript: string, over: Record<string, unknown> = {}) => ({ transcript, ...fields(over) });
+const day = (over: Record<string, unknown> = {}) => ({ warnings: [], ...fields(over) });
+const schemaOf = (call: { body: any }) => call.body.generationConfig.responseFormat.text.schema;
+const dayCalls = () => gemini.calls.filter((c) => "warnings" in schemaOf(c).properties);
 const promptOf = (call: { body: any }) =>
   call.body.contents[0].parts.map((p: { text?: string }) => p.text ?? "").join("\n");
 
-Deno.test("notas del día: cada nota rearma un solo reporte y guardar otra vez actualiza la misma fila", async () => {
+Deno.test("nota de voz: «¿Quisiste decir esto?», con «Sí» se guarda y se arma el reporte del día", async () => {
   await resetSheet();
   clearSent();
+  // El trabajo puede ir adelantado: la 06 es del sáb 31 y aun así se reconoce. Lo que no es una tarea va aparte.
   gemini.replies.push(
-    { transcript: "Hoy quedó instalada la viga y llegó bien", summary: "Viga instalada." },
-    day({
-      tasks: [{ id: "03", status: "terminada" }],
-      expected: [{ item: "Viga instalada y puntales retirados", arrived: true }],
+    reading("Hoy se subieron los muretes y se enchapó uno", {
+      tasks: [{ id: "06", status: "avanzó" }],
+      extra_work: "Enchape de un murete",
     }),
   );
   await processUpdate(say(BROTHER, voice("n1")));
+  const read = gemini.calls.at(-1)!;
+  assert(schemaOf(read).properties.tasks.items.properties.id.enum.includes("42")); // todo el cronograma sin terminar
+  assertStringIncludes(promptOf(read), "- 06: Subir muretes del área de labores hasta el techo (sáb 31 oct)");
+  assertStringIncludes(lastText(), "Escuché: «Hoy se subieron los muretes y se enchapó uno»");
+  assertStringIncludes(lastText(), "¿Quisiste decir esto?");
+  assertStringIncludes(lastText(), "Se hizo: 06 Subir muretes del área de labores hasta el techo – avanzó");
+  assertStringIncludes(lastText(), "Otro trabajo: Enchape de un murete");
+  assertEquals(rowsOf("Notas").length, 0); // nada escrito hasta el «Sí»
+
+  gemini.replies.push(day({ tasks: [{ id: "06", status: "avanzó" }], extra_work: "Enchape de un murete" }));
+  await processUpdate(press(BROTHER, "rep:q:1"));
   const [n1] = rowsOf("Notas");
   assertEquals([n1.fecha, n1.hora, n1.reportado_por, n1.tipo], ["2026-10-28", "17:00", "Hermano", "voz"]);
-  assertEquals([n1.transcripcion, n1.resumen], ["Hoy quedó instalada la viga y llegó bien", "Viga instalada."]);
+  assertEquals(n1.transcripcion, "Hoy se subieron los muretes y se enchapó uno");
+  assertStringIncludes(String(n1.resumen), "Otro trabajo: Enchape de un murete");
+  assertStringIncludes(promptOf(dayCalls().at(-1)!), "1. [17:00, Hermano] Se hizo: 06 Subir muretes");
   assertStringIncludes(lastText(), "Armado con 1 nota de hoy.");
-  assertStringIncludes(lastText(), "Se hizo hoy: 03 terminada");
-  assertStringIncludes(lastText(), "¿Lo guardo?");
-  assertStringIncludes(
-    promptOf(dayCalls().at(-1)!),
-    "1. [17:00, Hermano, voz] Hoy quedó instalada la viga y llegó bien",
-  );
-
-  // Segunda nota (texto corto: no gasta Gemini en resumirla). El reporte se arma con las dos.
-  gemini.replies.push(
-    day({
-      tasks: [{ id: "03", status: "terminada" }],
-      expected: [{ item: "Viga instalada y puntales retirados", arrived: true }],
-      tomorrow: ["d"],
-      tomorrow_detail: "Definir la ventana",
-    }),
-  );
-  await processUpdate(say(BROTHER, { text: "Mañana Carlos tiene que decidir la ventana" }));
-  assertEquals(rowsOf("Notas").length, 2);
-  assertStringIncludes(
-    promptOf(dayCalls().at(-1)!),
-    "2. [17:00, Hermano, texto] Mañana Carlos tiene que decidir la ventana",
-  );
-  assertStringIncludes(lastText(), "Armado con 2 notas de hoy.");
-  assertStringIncludes(lastText(), "Para mañana se necesita: Decisión de Carlos, Definir la ventana");
-  assertEquals(rowsOf("Reportes").length, 0); // el reporte se escribe solo con «Sí, guardar»
+  assertStringIncludes(lastText(), "Se hizo hoy: 06 avanzó; Enchape de un murete");
+  assertStringIncludes(lastText(), "Novedades: sin dato"); // no se inventa «Sin novedad»
 
   await processUpdate(press(BROTHER, "rep:ok"));
-  assertEquals(rowsOf("Reportes").length, 1);
-  assertEquals([task("03").estado, beam().llego], ["terminada", "sí"]);
-  assertStringIncludes(lastTo(CARLOS), "Tu hermano guardó el reporte:");
-
-  // Tercera nota que corrige: la 03 (ya terminada en la hoja) sigue en la lista porque está en el reporte de hoy.
-  gemini.replies.push(
-    day({
-      tasks: [{ id: "03", status: "avanzó" }],
-      expected: [{ item: "Viga instalada y puntales retirados", arrived: false }],
-    }),
-  );
-  await processUpdate(say(BROTHER, { text: "Corrijo: la viga no llegó, la traen mañana" }));
-  const third = dayCalls().at(-1)!;
-  assert(
-    third.body.generationConfig.responseFormat.text.schema.properties.tasks.items.properties.id.enum.includes("03"),
-  );
-  assertStringIncludes(promptOf(third), "Reporte anterior:\nREPORTE – mié 28 oct");
-  assertStringIncludes(lastText(), "Ya hay un reporte de hoy. ¿Lo actualizo con este?");
-
-  await processUpdate(press(BROTHER, "rep:ok"));
-  const reports = rowsOf("Reportes");
-  assertEquals(reports.length, 1); // uno por día: se actualizó
-  assertEquals([reports[0].tareas_terminadas, reports[0].tareas_avanzadas], ["", "03"]);
-  assertEquals([task("03").estado, beam().llego], ["en curso", "no"]); // la terminó hoy, la corrección la reabre
-  assert(sent.some((e) => e.params.chat_id === CARLOS && String(e.params.text).startsWith("⚠️ Hoy no llegó: Viga")));
-  assertStringIncludes(lastTo(CARLOS), "Tu hermano actualizó el reporte:");
+  const [row] = rowsOf("Reportes");
+  assertEquals(row.tareas_avanzadas, "06");
+  assertStringIncludes(String(row.texto_reporte), "Se hizo hoy: 06 avanzó; Enchape de un murete");
+  assertEquals(task("06").estado, "en curso");
+  // Sin INSERT_ROWS: en una pestaña vacía, las filas insertadas copiaban el formato del encabezado.
+  assert(appends.length > 0 && appends.every((q) => !q.includes("INSERT_ROWS")));
 });
 
-Deno.test("incongruencia entre notas: pregunta con botones y la respuesta queda como aclaración", async () => {
+Deno.test("nota con «No»: aclaración por texto, se vuelve a preguntar y se guarda una sola nota", async () => {
   await resetSheet();
   clearSent();
-  gemini.replies.push(day({ expected: [{ item: "Viga instalada y puntales retirados", arrived: true }] }));
-  await processUpdate(say(BROTHER, { text: "Ya llegó la viga" }));
-  const conflict = { question: "¿Llegó hoy la viga?", options: ["Sí, llegó", "No ha llegado"] };
-  gemini.replies.push(
-    day({ expected: [{ item: "Viga instalada y puntales retirados", arrived: false }], conflicts: [conflict] }),
-  );
-  await processUpdate(say(BROTHER, { text: "La viga todavía no ha llegado" }));
-  assertStringIncludes(lastText(), "Las notas no coinciden (1 de 1)");
-  assertStringIncludes(lastText(), "¿Llegó hoy la viga?");
-  assertEquals(buttons().map((b) => b.split("|")[1]), ["rep:k:0:0", "rep:k:0:1", "rep:k:0:n"]);
+  gemini.replies.push(reading("Se subió el murete", { tasks: [{ id: "06", status: "terminada" }] }));
+  await processUpdate(say(BROTHER, voice("n2")));
+  await processUpdate(press(BROTHER, "rep:q:0"));
+  assertEquals(lastText(), "¿Quieres aclarar con texto u otro audio? Mándalo aquí.");
 
-  // Gemini vuelve a ver la misma pregunta: como ya se respondió, no se repite.
   gemini.replies.push(
-    day({ expected: [{ item: "Viga instalada y puntales retirados", arrived: false }], conflicts: [conflict] }),
+    reading("No se terminó, falta el segundo murete", { tasks: [{ id: "06", status: "avanzó" }] }),
   );
-  await processUpdate(press(BROTHER, "rep:k:0:1"));
-  const note = rowsOf("Notas").at(-1)!;
-  assertEquals([note.tipo, note.transcripcion], ["aclaración", "Aclaración: ¿Llegó hoy la viga? → No ha llegado"]);
-  assertStringIncludes(promptOf(dayCalls().at(-1)!), "aclaración] Aclaración: ¿Llegó hoy la viga? → No ha llegado");
-  assertStringIncludes(lastText(), "¿Llegó lo esperado hoy?: no: Viga instalada y puntales retirados");
-  assert(!lastText().includes("Revisa"));
+  await processUpdate(say(BROTHER, { text: "No se terminó, falta el segundo murete" }));
+  const read = gemini.calls.at(-1)!;
+  assertStringIncludes(promptOf(read), "Nota original: Se subió el murete");
+  assertStringIncludes(promptOf(read), "Aclaración: No se terminó, falta el segundo murete");
+  assertStringIncludes(lastText(), "Se hizo: 06 Subir muretes del área de labores hasta el techo – avanzó");
 
-  // Otra incongruencia, ahora aclarada con una nota nueva.
-  gemini.replies.push(day({ conflicts: [{ question: "¿Vino el albañil?", options: ["Sí", "No"] }] }));
-  await processUpdate(say(BROTHER, { text: "El albañil no vino" }));
-  await processUpdate(press(BROTHER, "rep:k:0:n"));
-  assertStringIncludes(lastText(), "Manda una nota con la aclaración.");
-  gemini.replies.push(day({ news: ["El albañil no vino"] }));
-  await processUpdate(say(BROTHER, { text: "Aclaro: el albañil no vino hoy" }));
-  assertStringIncludes(lastText(), "Novedades: El albañil no vino");
-  assertEquals(rowsOf("Notas").length, 5);
+  gemini.replies.push(day({ tasks: [{ id: "06", status: "avanzó" }] }));
+  await processUpdate(press(BROTHER, "rep:q:1"));
+  const notes = rowsOf("Notas");
+  assertEquals(notes.length, 1);
+  assertEquals(notes[0].transcripcion, "Se subió el murete\nAclaración: No se terminó, falta el segundo murete");
+  assertStringIncludes(String(notes[0].resumen), "– avanzó");
+
+  // «Descartar la nota»: no se guarda nada.
+  gemini.replies.push(reading("blablá"));
+  await processUpdate(say(BROTHER, { text: "blablá" }));
+  assertStringIncludes(lastText(), "No encontré nada para el reporte.");
+  await processUpdate(press(BROTHER, "rep:q:0"));
+  gemini.replies.push(day({ tasks: [{ id: "06", status: "avanzó" }] }));
+  await processUpdate(press(BROTHER, "rep:q:x"));
+  assertEquals(rowsOf("Notas").length, 1);
+  // Vuelve a mostrar el reporte del día con las notas que sí se guardaron.
+  assertStringIncludes(lastText(), "Armado con 1 nota de hoy.");
+  await processUpdate(press(BROTHER, "rep:x"));
+});
+
+Deno.test("varias notas seguidas esperan su turno; el reporte se arma una vez, avisa contradicciones y se actualiza", async () => {
+  await resetSheet();
+  clearSent();
+  const builds = dayCalls().length;
+  gemini.replies.push(
+    reading("Llegó la viga", { expected: [{ item: "Viga instalada y puntales retirados", arrived: true }] }),
+  );
+  await processUpdate(say(BROTHER, { text: "Llegó la viga" }));
+  await processUpdate(say(BROTHER, { text: "Mañana Carlos decide la ventana" })); // llega antes del «Sí»
+  assertStringIncludes(lastText(), "Primero responde si entendí bien la nota anterior");
+
+  gemini.replies.push(reading("Mañana Carlos decide la ventana", { tomorrow: ["d"], tomorrow_detail: "Ventana" }));
+  await processUpdate(press(BROTHER, "rep:q:1"));
+  assertStringIncludes(lastText(), "Para mañana: Decisión de Carlos, Ventana"); // la segunda, sin armar todavía
+  assertEquals(dayCalls().length, builds);
+
+  gemini.replies.push(
+    day({
+      expected: [{ item: "Viga instalada y puntales retirados", arrived: true }],
+      tomorrow: ["d"],
+      tomorrow_detail: "Ventana",
+      warnings: ["Una nota dice que vino el albañil y otra que no"],
+    }),
+  );
+  await processUpdate(press(BROTHER, "rep:q:1"));
+  assertEquals(dayCalls().length, builds + 1);
+  assertStringIncludes(lastText(), "Armado con 2 notas de hoy.");
+  assertStringIncludes(lastText(), "⚠️ Revisa: Una nota dice que vino el albañil y otra que no");
+  await processUpdate(press(BROTHER, "rep:ok"));
+  assertEquals(beam().llego, "sí");
+
+  // Después de guardar llega una corrección: el reporte de hoy es la base y se actualiza la misma fila.
+  gemini.replies.push(
+    reading("Corrijo, la viga no llegó", {
+      expected: [{ item: "Viga instalada y puntales retirados", arrived: false }],
+    }),
+    day({ expected: [{ item: "Viga instalada y puntales retirados", arrived: false }], tomorrow: ["d"] }),
+  );
+  await processUpdate(say(BROTHER, { text: "Corrijo, la viga no llegó" }));
+  await processUpdate(press(BROTHER, "rep:q:1"));
+  assertStringIncludes(promptOf(dayCalls().at(-1)!), "Reporte anterior:\nREPORTE – mié 28 oct");
+  assertStringIncludes(lastText(), "Ya hay un reporte de hoy. ¿Lo actualizo con este?");
+  await processUpdate(press(BROTHER, "rep:ok"));
+  assertEquals(rowsOf("Reportes").length, 1);
+  assertEquals(beam().llego, "no");
+  assertStringIncludes(lastTo(CARLOS), "Tu hermano actualizó el reporte:");
 });
 
 Deno.test("Gemini sin cuota al armar el reporte: la nota no se guarda dos veces", async () => {
   await resetSheet();
   clearSent();
-  gemini.replies.push({ status: 429 }, day({ news: ["Sin novedad"] }));
+  gemini.replies.push(
+    reading("Hoy sin novedad", { news: ["Sin novedad"] }),
+    { status: 429 },
+    day({ news: ["Sin novedad"] }),
+  );
   await processUpdate(say(BROTHER, { text: "Hoy sin novedad" }));
+  await processUpdate(press(BROTHER, "rep:q:1"));
   assertEquals(rowsOf("Notas").length, 1);
   assert(sent.some((e) => e.params.text === "Lo proceso en unos minutos."));
   assertStringIncludes(lastText(), "Novedades: Sin novedad");
