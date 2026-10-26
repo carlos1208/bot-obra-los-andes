@@ -20,6 +20,7 @@ await tg("setMyCommands", {
   commands: [
     { command: "reporte", description: "Reporte del día" },
     { command: "gasto", description: "Registrar una compra" },
+    { command: "pago", description: "Registrar un pago o reposición de caja menor (Carlos)" },
     { command: "estado", description: "Semana de obra, tareas de hoy y disponible" },
     { command: "antes", description: "Subir fotos ANTES" },
     { command: "despues", description: "Subir fotos DESPUÉS" },

@@ -253,7 +253,76 @@ export function pettyCashBalance(cfg: Config, expenses: Row[], payments: Row[]):
   return cfg.fondo_caja_menor + refills - spent;
 }
 
-/** total_albanil − todo lo pagado al albañil (incluye lo entregado antes de la obra). */
-export function masonBalance(cfg: Config, payments: Row[]): number {
-  return cfg.total_albanil - sum(payments, "valor", (r) => normalize(r.a_quien) === "albanil");
+/** Todo lo pagado al albañil (incluye lo entregado antes de la obra). */
+export function masonPaid(payments: Row[]): number {
+  return sum(payments, "valor", (r) => normalize(r.a_quien) === "albanil");
 }
+
+/** total_albanil − todo lo pagado al albañil. */
+export function masonBalance(cfg: Config, payments: Row[]): number {
+  return cfg.total_albanil - masonPaid(payments);
+}
+
+/** Facturas de caja menor que faltan por reponer: fondo − saldo (negativo si se repuso de más). */
+export function pettyCashToRefill(cfg: Config, expenses: Row[], payments: Row[]): number {
+  return cfg.fondo_caja_menor - pettyCashBalance(cfg, expenses, payments);
+}
+
+// --- Pagos e hitos -------------------------------------------------------------
+
+/** A quién se le paga (sección 1 del prompt). Pagos puede traer otros nombres. */
+export const PAYEES = [
+  "Albañil",
+  "Carpintero",
+  "Drywall",
+  "Aluminio y vidrio",
+  "Pulidor",
+  "Gases del Caribe",
+  "Triple A",
+  "Caja menor",
+];
+
+/** La lista de PAYEES más los nombres que ya están en Pagos. */
+export function payeesOf(payments: Row[]): string[] {
+  const names = [...PAYEES];
+  for (const r of payments) {
+    const name = text(r.a_quien);
+    if (name && !names.some((n) => normalize(n) === normalize(name))) names.push(name);
+  }
+  return names;
+}
+
+export const isPettyCash = (payee: unknown) => normalize(payee) === "caja menor";
+
+export interface Milestone {
+  hito: string;
+  nombre: string;
+  fecha_estimada: string;
+  criterio: string;
+  valor: number;
+  valor_a_pagar: number;
+  fecha_cumplido: string | null;
+  pagado: boolean;
+  fecha_pago: string | null;
+  _row: number;
+}
+
+export function readMilestones(rows: Row[]): Milestone[] {
+  return rows
+    .filter((r) => text(r.hito) !== "")
+    .map((r) => ({
+      hito: text(r.hito).toUpperCase(),
+      nombre: text(r.nombre),
+      fecha_estimada: cellDate(r.fecha_estimada) ?? "",
+      criterio: text(r.criterio),
+      valor: cellNumber(r.valor),
+      valor_a_pagar: cellNumber(r.valor_a_pagar),
+      fecha_cumplido: cellDate(r.fecha_cumplido),
+      pagado: isYes(r.pagado),
+      fecha_pago: cellDate(r.fecha_pago),
+      _row: r._row,
+    }));
+}
+
+/** Capítulos de la pestaña Presupuesto, en su orden. */
+export const budgetChapters = (rows: Row[]): string[] => rows.map((r) => text(r.capitulo)).filter(Boolean);

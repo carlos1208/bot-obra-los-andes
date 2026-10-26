@@ -20,7 +20,7 @@ import {
 } from "../../_shared/format.ts";
 import { lineEditText, linesTotal, lineText, parseLines } from "../../_shared/products.ts";
 import { appendRow, appendRows, readTabs } from "../../_shared/sheets.ts";
-import { type Config, pettyCashBalance, readConfig, type Row } from "../../_shared/site.ts";
+import { budgetChapters, type Config, pettyCashBalance, readConfig, type Row } from "../../_shared/site.ts";
 import {
   answerCallback,
   downloadFile,
@@ -96,10 +96,8 @@ async function save(ctx: Context, step: string, data: Data): Promise<void> {
   await saveSession(ctx.chatId, ctx.userId, FLOW, step, { ...data, hilo: ctx.threadId ?? null });
 }
 
-const chaptersOf = (budget: Row[]) => budget.map((r) => String(r.capitulo ?? "").trim()).filter(Boolean);
-
 async function readChapters(): Promise<string[]> {
-  return chaptersOf((await readTabs(["Presupuesto"])).Presupuesto);
+  return budgetChapters((await readTabs(["Presupuesto"])).Presupuesto);
 }
 
 const invoiceKey = (s: unknown) => String(s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -162,7 +160,7 @@ export async function receiveInvoice(ctx: Context, file: ReceivedImage, back?: R
   const wait = await ctx.reply("Leyendo la factura…");
   const { Presupuesto, Gastos } = await readTabs(["Presupuesto", "Gastos"]);
   const { bytes } = await downloadFile(file.fileId);
-  const inv = await extractInvoice({ mimeType: file.mime, bytes }, chaptersOf(Presupuesto));
+  const inv = await extractInvoice({ mimeType: file.mime, bytes }, budgetChapters(Presupuesto));
   const draft: Draft = {
     noInvoice: false,
     file,

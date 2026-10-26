@@ -218,3 +218,131 @@ export async function proposeTasks(
   const valid = new Set(tasks.map((t) => t.id));
   return [...new Set(got.tasks.filter((id) => valid.has(id)))];
 }
+
+// --- Privado: pagos, reposiciones y preguntas -----------------------------------
+
+/** Datos de la hoja que puede necesitar una pregunta. */
+export const TOPICS = {
+  cronograma: "tareas, fechas, semanas, qué toca, atrasos y quién hace qué",
+  objetivos: "objetivos semanales de cada persona",
+  esperado: "visitas y entregas esperadas: qué debe llegar y si llegó",
+  hitos: "hitos del albañil: fechas, criterios y si están cumplidos",
+  pagos: "pagos hechos (a quién y cuánto) y lo pagado al albañil",
+  presupuesto: "presupuesto por capítulo, lo gastado y lo disponible de los 12 M",
+  compras: "compras, facturas, productos y caja menor",
+  reportes: "reportes diarios y notas de la obra",
+} as const;
+export type Topic = keyof typeof TOPICS;
+
+export interface PrivateMessage {
+  transcript: string;
+  kind: "pago" | "reposicion" | "pregunta" | "otro";
+  payee: string | null;
+  concept: string | null;
+  milestone: string; // H1…H5 o «ninguno»
+  amount: number | null;
+  method: string | null;
+  date: string | null; // AAAA-MM-DD
+  chapter: string;
+  topics: Topic[];
+  money: boolean;
+}
+
+const PRIVATE_INSTRUCTIONS = (who: string, today: string) =>
+  `Lees un mensaje (texto o nota de voz, en español de Colombia) que ${who} le manda al bot de una obra. Hoy es ${today}.
+- transcript: lo que dice, palabra por palabra. Si es texto, cópialo igual.
+- kind: «pago» si cuenta un pago que ya hizo; «reposicion» si repuso o recargó la caja menor; «pregunta» si pregunta algo de la obra; «otro» si no es nada de eso.
+Si es pago o reposición:
+- payee: a quién se le pagó, con uno de los nombres de la lista si corresponde. En una reposición, «Caja menor».
+- concept: concepto corto. En un hito: «Hito H2 – <nombre del hito>». En una reposición: «Reposición de caja menor».
+- milestone: el hito del albañil (H1 a H5) si el pago es de un hito; si no, «ninguno».
+- amount: valor en pesos enteros: «700 mil» = 700000, «1,2 M» = 1200000, «un millón doscientos» = 1200000. Si no lo dice, null.
+- method: medio de pago como lo dice (Nequi, efectivo, transferencia…); si no lo dice, null.
+- date: fecha del pago en AAAA-MM-DD. Sin fecha o «hoy» = hoy; «ayer» = el día anterior.
+- chapter: el capítulo del presupuesto que mejor encaja con el pago.
+Si es pregunta:
+- topics: qué datos de la hoja hacen falta para responderla.
+- money: true si pregunta por pagos, valores de hitos, presupuesto, lo gastado o lo disponible. Las compras y la caja menor no cuentan como dinero.
+Lo que no aplique: null, «ninguno», lista vacía o false.`;
+
+/** Mensaje libre por privado: ¿pago, reposición de caja menor o pregunta? Con los datos de cada caso. */
+export function interpretMessage(
+  input: InlineFile | string,
+  opts: {
+    fromCarlos: boolean;
+    today: string; // «mié 28 oct de 2026 (2026-10-28)»
+    payees: string[];
+    milestones: { code: string; name: string }[];
+    chapters: string[];
+  },
+  model?: string,
+): Promise<PrivateMessage> {
+  const who = opts.fromCarlos ? "Carlos, el dueño," : "el maestro de obra";
+  const audio = typeof input !== "string";
+  return generateJson<PrivateMessage>({
+    instructions: PRIVATE_INSTRUCTIONS(who, opts.today),
+    parts: [
+      [
+        `A quién se paga: ${opts.payees.join(", ")}.`,
+        `Hitos del albañil: ${opts.milestones.map((m) => `${m.code} ${m.name}`).join("; ")}.`,
+      ].join("\n"),
+      audio ? "Mensaje en esta nota de voz:" : `Mensaje: ${input}`,
+      ...(audio ? [input] : []),
+    ],
+    schema: {
+      type: "object",
+      properties: {
+        transcript: { type: "string" },
+        kind: { type: "string", enum: ["pago", "reposicion", "pregunta", "otro"] },
+        payee: { type: ["string", "null"], description: "A quién se le pagó" },
+        concept: { type: ["string", "null"], description: "Concepto corto" },
+        milestone: { type: "string", enum: [...opts.milestones.map((m) => m.code), "ninguno"] },
+        amount: { type: ["integer", "null"], description: "Valor en pesos enteros" },
+        method: { type: ["string", "null"], description: "Medio de pago" },
+        date: { type: ["string", "null"], format: "date", description: "Fecha del pago" },
+        chapter: oneOf(opts.chapters, "Capítulo del presupuesto"),
+        topics: {
+          type: "array",
+          items: {
+            type: "string",
+            enum: Object.keys(TOPICS),
+            description: Object.entries(TOPICS).map(([k, v]) => `${k}: ${v}`).join("; "),
+          },
+        },
+        money: { type: "boolean" },
+      },
+      required: [
+        "transcript",
+        "kind",
+        "payee",
+        "concept",
+        "milestone",
+        "amount",
+        "method",
+        "date",
+        "chapter",
+        "topics",
+        "money",
+      ],
+    },
+    model,
+  });
+}
+
+const ANSWER_INSTRUCTIONS =
+  `Respondes una pregunta sobre una obra (remodelación de un apartamento en Barranquilla) con los datos de la hoja que te paso, leídos en este momento.
+- answer: la respuesta en español de Colombia, en frases cortas y concretas. Usa solo estos datos; si no alcanzan, dilo. No inventes.
+- Pesos con punto de miles y sin decimales ($1.234.567). Fechas como «lun 26 oct».
+- Si es una lista, una línea por elemento que empieza con «• ».
+- Sin saludos ni relleno.`;
+
+/** Redacta la respuesta a una pregunta con los datos de la hoja (solo los que la pregunta necesita). */
+export async function answerQuestion(question: string, data: string, model?: string): Promise<string> {
+  const got = await generateJson<{ answer: string }>({
+    instructions: ANSWER_INSTRUCTIONS,
+    parts: [`Datos de la hoja:\n${data}`, `Pregunta: ${question}`],
+    schema: { type: "object", properties: { answer: { type: "string" } }, required: ["answer"] },
+    model,
+  });
+  return got.answer;
+}

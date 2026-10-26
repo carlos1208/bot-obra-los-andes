@@ -15,14 +15,14 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 
 ## Estado por fases
 
-| Fase                   | Qué incluye                                                                                                     | Estado    |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------- | --------- |
-| 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista     |
-| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista     |
-| 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | Lista     |
-| 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre», pares en el reporte                    | Lista     |
-| 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Pendiente |
-| 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Pendiente |
+| Fase                   | Qué incluye                                                                                                     | Estado        |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------- | ------------- |
+| 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista         |
+| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista         |
+| 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | Lista         |
+| 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre», pares en el reporte                    | Lista         |
+| 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | **En prueba** |
+| 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Pendiente     |
 
 ## Estructura
 
@@ -240,6 +240,34 @@ total.
   con la fecha y quién la registró; «Cancelar» no guarda nada. Si alguien la registra mientras tienes la vista previa
   abierta, el aviso sale al tocar «Sí, guardar» y se guarda solo si vuelves a tocarlo.
 - **Compra sin factura:** queda una fila en `Productos` con lo que se compró, sin número de factura.
+
+### Prueba de la fase 5
+
+Antes: `git pull`, `deno task test`, `npx supabase functions deploy telegram --use-api` y `deno task webhook` (registra
+`/pago` en el menú). Todo va por el privado con el bot: un texto o una nota de voz lo lee Gemini y decide si es un pago,
+una reposición de caja menor o una pregunta.
+
+1. **Pago del H1 por 700.000:** «le pagué 700 mil al albañil por el H1 por Nequi» (o `/pago` y luego el mensaje).
+   - Vista previa: a quién, concepto, hito con su valor a pagar, valor, medio, fecha, capítulo y «Cuenta en los 12 M:
+     sí».
+   - Controles: avisa si el valor no es el `valor_a_pagar` del hito y si lo pagado al albañil pasaría del total más la
+     reserva (`total_albanil` y `reserva_albanil`). Si el hito no tiene `fecha_cumplido`, pregunta si lo marca cumplido:
+     toca «☐ Marcar H1 cumplido» (queda ✅).
+   - «Corregir campo» cambia cualquier dato (a quién y el hito con botones; el valor, la fecha y el resto, escritos).
+   - «Sí, guardar»: fila en `Pagos` y, en `Hitos`, `pagado = sí`, `fecha_pago` y, si lo marcaste, `fecha_cumplido`.
+     Responde con lo pagado al albañil y el disponible de los 12 M.
+2. **Reposición de caja menor:** «repuse 87.500 de caja menor». La vista previa muestra el efectivo esperado y las
+   facturas sin reponer. Al guardar queda en `Pagos` con `a_quien = Caja menor` y `cuenta_12M = no`, y responde con el
+   arqueo: efectivo esperado antes de reponer + facturas sin reponer = fondo (100.000). Avisa si lo repuesto no es igual
+   a las facturas.
+3. **«Marcar H2 cumplido»** (texto exacto, sin Gemini): muestra el criterio del hito; «Cambiar fecha» o «Sí, guardar»
+   pone `fecha_cumplido`.
+4. **Tres consultas:**
+   - Tú: «¿cuánto queda de los 12 M?» y «¿qué debe llegar hoy?». La respuesta termina con «Dato de la hoja, hh:mm».
+   - Tu hermano, por su privado: «¿cuánto se le ha pagado al albañil?» → «Eso lo ve solo Carlos.»
+     (`hermano_ve_dinero = no`). Sí le responde lo que no es dinero («¿qué toca esta semana?»).
+   - Para cada pregunta, Gemini dice qué datos necesita y el bot lee solo esas pestañas en ese momento: si corriges una
+     celda, la siguiente respuesta ya la usa.
 
 ## Uso diario
 
