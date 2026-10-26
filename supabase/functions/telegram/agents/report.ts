@@ -438,9 +438,16 @@ async function sheetFacts(data: Data) {
     next,
     photos,
     missingAfter,
+    // Compras registradas hoy (la factura puede ser de otro día); las filas viejas sin registrado_el, por su fecha.
     purchases: Gastos
-      .filter((r) => cellDate(r.fecha) === data.date)
-      .map((r) => `${short(String(r.items ?? ""), 40)} en ${r.proveedor || "—"}, ${formatPesos(cellNumber(r.valor))}`),
+      .filter((r) => (cellDate(r.registrado_el) ?? cellDate(r.fecha)) === data.date)
+      .map((r) => {
+        const invoiceDate = cellDate(r.fecha);
+        const from = invoiceDate && invoiceDate !== data.date ? ` (factura del ${shortDate(invoiceDate)})` : "";
+        return `${short(String(r.items ?? ""), 40)} en ${r.proveedor || "—"}, ${
+          formatPesos(cellNumber(r.valor))
+        }${from}`;
+      }),
     balance: pettyCashBalance(cfg, Gastos, Pagos),
     saved: savedToday.length > 0 || Boolean(todayReport(Reportes, data.date)),
   };

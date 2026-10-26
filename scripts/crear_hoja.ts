@@ -1,5 +1,6 @@
 // Carga las pestañas de la hoja desde semillas/*.csv.
-// No toca una pestaña que ya tenga datos, salvo que la pidas con --reemplazar.
+// No toca los datos de una pestaña que ya los tenga, salvo que la pidas con --reemplazar. Si la semilla trae
+// columnas nuevas, las agrega al final del encabezado.
 //
 // Uso:
 //   deno task crear-hoja                          crea y llena las pestañas que falten
@@ -41,6 +42,7 @@ const DATE_COLUMNS = new Set([
   "fecha_estimada",
   "fecha_cumplido",
   "fecha_pago",
+  "registrado_el",
 ]);
 const MONEY_CONFIG_KEYS = new Set([
   "presupuesto_disponible",
@@ -149,9 +151,43 @@ const writes: { range: string; values: unknown[][] }[] = [];
 const clears: string[] = [];
 const requests: unknown[] = [];
 
+const headerFormat = (sheetId: number, from?: number, to?: number) => ({
+  repeatCell: {
+    range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: from, endColumnIndex: to },
+    cell: {
+      userEnteredFormat: { textFormat: { bold: true }, backgroundColor: { red: 0.91, green: 0.94, blue: 0.98 } },
+    },
+    fields: "userEnteredFormat(textFormat,backgroundColor)",
+  },
+});
+
+/** Formato de pesos o de fecha de la columna, según su nombre. */
+function columnFormat(tab: string, sheetId: number, header: string, c: number) {
+  const format = MONEY_COLUMNS.has(header) ? MONEY_FORMAT : DATE_COLUMNS.has(header) ? DATE_FORMAT : null;
+  if (!format || tab === "Config") return [];
+  return [{
+    repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: c, endColumnIndex: c + 1 },
+      cell: { userEnteredFormat: { numberFormat: format } },
+      fields: "userEnteredFormat.numberFormat",
+    },
+  }];
+}
+
 for (const t of TABS) {
   if (withData.has(t) && !replace.has(t)) {
-    console.log(`  = ${t}: ya tiene datos, no la toco`);
+    // Columnas nuevas de la semilla: al final del encabezado, sin tocar los datos.
+    const current = (sample.valueRanges[TABS.indexOf(t)].values?.[0] ?? []).map((v) => String(v ?? "").trim());
+    const added = (tabValues(t, await readCsv(t))[0] as string[]).filter((h) => !current.includes(h));
+    if (!added.length) {
+      console.log(`  = ${t}: ya tiene datos, no la toco`);
+      continue;
+    }
+    const sheetId = sheetIds.get(t)!;
+    writes.push({ range: `'${t}'!${columnLetter(current.length)}1`, values: [added] });
+    requests.push(headerFormat(sheetId, current.length, current.length + added.length));
+    added.forEach((h, i) => requests.push(...columnFormat(t, sheetId, h, current.length + i)));
+    console.log(`  + ${t}: columnas nuevas ${added.join(", ")} (los datos no se tocan)`);
     continue;
   }
   const values = tabValues(t, await readCsv(t));
@@ -166,29 +202,11 @@ for (const t of TABS) {
         fields: "gridProperties.frozenRowCount",
       },
     },
-    {
-      repeatCell: {
-        range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
-        cell: {
-          userEnteredFormat: { textFormat: { bold: true }, backgroundColor: { red: 0.91, green: 0.94, blue: 0.98 } },
-        },
-        fields: "userEnteredFormat(textFormat,backgroundColor)",
-      },
-    },
+    headerFormat(sheetId),
     // Borra el formato que quedó debajo del encabezado (p. ej. filas que copiaron el del encabezado).
     { repeatCell: { range: { sheetId, startRowIndex: 1 }, cell: {}, fields: "userEnteredFormat" } },
   );
-  headers.forEach((h, c) => {
-    const format = MONEY_COLUMNS.has(h) ? MONEY_FORMAT : DATE_COLUMNS.has(h) ? DATE_FORMAT : null;
-    if (!format || t === "Config") return;
-    requests.push({
-      repeatCell: {
-        range: { sheetId, startRowIndex: 1, startColumnIndex: c, endColumnIndex: c + 1 },
-        cell: { userEnteredFormat: { numberFormat: format } },
-        fields: "userEnteredFormat.numberFormat",
-      },
-    });
-  });
+  headers.forEach((h, c) => requests.push(...columnFormat(t, sheetId, h, c)));
   if (t === "Config") {
     const vc = headers.indexOf("valor");
     values.slice(1).forEach((r, k) => {
@@ -210,6 +228,8 @@ for (const t of TABS) {
 
 if (clears.length) {
   await sheetsFetch("/values:batchClear", { method: "POST", body: JSON.stringify({ ranges: clears }) });
+}
+if (writes.length) {
   await sheetsFetch("/values:batchUpdate", {
     method: "POST",
     body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: writes }),

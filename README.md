@@ -227,8 +227,9 @@ Antes: `git pull`, `deno task test`, `npx supabase functions deploy telegram --u
 
 - **Cambiar el modelo de Gemini:** `npx supabase secrets set GEMINI_MODEL=<modelo>` (o `GEMINI_MODEL_FALLBACK`). No hay
   que volver a desplegar.
-- **Volver a cargar las semillas:** `deno task crear-hoja --reemplazar Tareas,Objetivos`. Sin `--reemplazar` no toca las
-  pestañas que ya tienen datos. `--reemplazar todas` borra también Reportes, Gastos y Pagos.
+- **Volver a cargar las semillas:** `deno task crear-hoja --reemplazar Tareas,Objetivos`. Sin `--reemplazar` no toca los
+  datos de las pestañas que ya los tienen; si la semilla trae columnas nuevas, las agrega al final del encabezado.
+  `--reemplazar todas` borra también Reportes, Gastos y Pagos.
 - **Cambiar el catálogo de fotos ANTES:** edita `semillas/fotos_antes.json`, corre `deno task catalogo` y vuelve a
   desplegar `telegram`. Una prueba falla si las dos copias no son iguales.
 - **Pruebas:** `deno task test`. Revisión de tipos: `deno task check`.

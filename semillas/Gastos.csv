@@ -1,5 +1,5 @@
-fecha,proveedor,nit,numero_factura,items,capitulo,valor,medio_pago,cuenta_12M,registrado_por,enlace_factura,nota
-2026-09-22,Easy,,EL021045207,"Lavamanos, sanitario, griferías, sifón, lavaplatos, estufa a gas natural",Pagado antes de los 12 M,1834030,Carlos,no,Carlos,05 Facturas y pagos/Facturas,Pagado antes de los 12 M
-2026-09-30,Easy,,EL021045523,"Enchape de pared y piso, pegante, boquilla, sanitario, 2 regaderas, lavamanos, grifería, tomas e interruptores, rejillas, 2 cerraduras",Pagado antes de los 12 M,2703886,Carlos,no,Carlos,05 Facturas y pagos/Facturas,Pagado antes de los 12 M
-2026-10-19,Homecenter,,5209100261757,Viga de acero (tubo 90 x 50) con corte y listón de pino 2x3,Pagado antes de los 12 M,215700,Carlos,no,Carlos,05 Facturas y pagos/Facturas,Pagado antes de los 12 M
-2026-10-20,Homecenter,,5212100268554,Transporte,Pagado antes de los 12 M,19900,Carlos,no,Carlos,05 Facturas y pagos/Facturas,Pagado antes de los 12 M
+fecha,proveedor,nit,numero_factura,items,capitulo,valor,medio_pago,cuenta_12M,registrado_por,enlace_factura,nota,registrado_el
+2026-09-22,Easy,,EL021045207,"Lavamanos, sanitario, griferías, sifón, lavaplatos, estufa a gas natural",Pagado antes de los 12 M,1834030,Carlos,no,Carlos,05 Facturas y pagos/Facturas,Pagado antes de los 12 M,
+2026-09-30,Easy,,EL021045523,"Enchape de pared y piso, pegante, boquilla, sanitario, 2 regaderas, lavamanos, grifería, tomas e interruptores, rejillas, 2 cerraduras",Pagado antes de los 12 M,2703886,Carlos,no,Carlos,05 Facturas y pagos/Facturas,Pagado antes de los 12 M,
+2026-10-19,Homecenter,,5209100261757,Viga de acero (tubo 90 x 50) con corte y listón de pino 2x3,Pagado antes de los 12 M,215700,Carlos,no,Carlos,05 Facturas y pagos/Facturas,Pagado antes de los 12 M,
+2026-10-20,Homecenter,,5212100268554,Transporte,Pagado antes de los 12 M,19900,Carlos,no,Carlos,05 Facturas y pagos/Facturas,Pagado antes de los 12 M,

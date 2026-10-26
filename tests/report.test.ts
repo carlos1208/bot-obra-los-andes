@@ -231,7 +231,7 @@ Deno.test("«Ninguna» y «Agregar compra» desde la vista previa (la factura pu
   gemini.replies.push({
     supplier: "Homecenter",
     tax_id: null,
-    date: "2026-10-28",
+    date: "2026-10-14", // la factura es de otro día: cuenta el día en que se registra
     number: "77",
     items: ["Brocha"],
     total: 12000,
@@ -241,7 +241,10 @@ Deno.test("«Ninguna» y «Agregar compra» desde la vista previa (la factura pu
   await processUpdate(tap(BROTHER, "gas:p:caja", GROUP, EXPENSES_TOPIC));
   await processUpdate(tap(BROTHER, "gas:ok", GROUP, EXPENSES_TOPIC));
   // La vista previa vuelve al tema Reportes con la compra.
-  assertStringIncludes(lastTo(GROUP, REPORTS_TOPIC), "• Brocha en Homecenter, $12.000\nCaja menor: $88.000");
+  assertStringIncludes(
+    lastTo(GROUP, REPORTS_TOPIC),
+    "• Brocha en Homecenter, $12.000 (factura del mié 14 oct)\nCaja menor: $88.000",
+  );
   await processUpdate(press(BROTHER, "rep:x"));
 });
 

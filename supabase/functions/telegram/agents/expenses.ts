@@ -492,6 +492,7 @@ async function saveExpense(ctx: Context, session: Session<Data>, messageId: numb
       medio_pago: d.payment,
       cuenta_12M: "sí",
       registrado_por: roleLabel(ctx),
+      registrado_el: todayISO(),
       enlace_factura: link,
       nota: d.noInvoice ? `Sin factura. ${d.note}` : "",
     });

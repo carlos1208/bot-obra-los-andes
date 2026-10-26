@@ -69,6 +69,7 @@ Deno.test("factura con caja menor: vista previa, guardar, Drive y saldo", async 
   assertEquals(row.medio_pago, "caja menor");
   assertEquals(row.cuenta_12M, "sí");
   assertEquals(row.registrado_por, "Hermano");
+  assertEquals(row.registrado_el, "2026-10-28");
   const file = drive.find((f) => f.name === "2026-10-28 Ferretería El Maestro FE123 - 32.000.jpg")!;
   assertEquals(file.parents, [drive.find((f) => f.name === "Facturas")!.id]);
   assertEquals(row.enlace_factura, `https://drive/${drive.indexOf(file) + 1}`);
