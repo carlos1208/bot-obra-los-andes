@@ -10,6 +10,10 @@ export interface MailInvoice {
   empresa: string;
   numero: string;
   remitente: string;
+  // Del XML (los manda el script desde que lee el .zip al buscar; con un script viejo no vienen).
+  total?: number | null;
+  fechaFactura?: string | null; // AAAA-MM-DD
+  tienda?: string | null;
 }
 
 export interface MailInvoiceFiles {

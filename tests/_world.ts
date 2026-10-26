@@ -288,6 +288,9 @@ export interface FakeMail {
   empresa: string;
   numero: string;
   remitente: string;
+  total?: number | null;
+  fechaFactura?: string | null;
+  tienda?: string | null;
   xml: string | null;
   pdf: string | null; // base64
 }

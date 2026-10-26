@@ -17,6 +17,7 @@ import {
   rowsOf,
   tap,
 } from "./_world.ts";
+import { storeOf } from "../supabase/functions/telegram/agents/mail_invoices.ts";
 
 clock.now = () => new Date("2026-10-28T15:00:00Z"); // mié 28 oct, 10:00 en Bogotá
 
@@ -28,6 +29,9 @@ const NEW = {
   empresa: "MATERIALES DEL CARIBE S.A.S.",
   numero: "MC1234",
   remitente: "Facturación <facturas@materialesdelcaribe.co>",
+  total: 360420,
+  fechaFactura: "2026-10-27",
+  tienda: "MATERIALES DEL CARIBE CENTRO",
   xml,
   pdf: btoa("%PDF-1.4 prueba"),
 };
@@ -55,12 +59,13 @@ Deno.test("/correo: lista solo lo nuevo, lee el XML, vista previa y guarda con l
   assertEquals(gemini.calls.length, calls);
   assertEquals(mailbox.marked, ["18f0vieja"]);
   const list = lastText();
+  // Fecha, establecimiento y total (del XML, sin IA) dicen más que el número de la factura.
   assertStringIncludes(
     list,
-    "<b>Facturas nuevas en tu correo</b> (últimos 30 días)\n• mar 27 oct · MATERIALES DEL CARIBE S.A.S. · MC1234",
+    "<b>Facturas nuevas en tu correo</b> (últimos 30 días)\n• mar 27 oct · Materiales del Caribe Centro · $360.420",
   );
   assertStringIncludes(list, "1 ya estaba en Gastos: la marqué para que no vuelva a salir.");
-  assertEquals(buttons(), ["mar 27 oct MATERIALES DEL CARIBE S.A.S.…|cor:f:18f0nueva"]);
+  assertEquals(buttons(), ["$360.420 · 27 oct · Materiales del Cari…|cor:f:18f0nueva"]);
 
   gemini.replies.push(naming);
   await processUpdate(tap(CARLOS, "cor:f:18f0nueva"));
@@ -107,4 +112,12 @@ Deno.test("/correo es solo de Carlos y por privado", async () => {
   clearSent();
   await processUpdate(message(BROTHER, { text: "/correo" }));
   assertEquals(lastText(), "Las facturas del correo las registra Carlos.");
+});
+
+Deno.test("establecimiento: la tienda del XML, el buzón de la misma empresa o la razón social", () => {
+  const base = { ...NEW, tienda: null };
+  assertEquals(storeOf({ ...base, tienda: "EASY ALTOS DEL PRADO" }), "Easy Altos del Prado");
+  assertEquals(storeOf({ ...base, remitente: "efacturahomecenter@homecenter.co" }), "Homecenter");
+  // Si lo manda un proveedor de facturación, su dominio no es la tienda: queda la razón social.
+  assertEquals(storeOf({ ...base, remitente: "Factura <noreply@proveedorfe.com>" }), "Materiales del Caribe S.A.S.");
 });

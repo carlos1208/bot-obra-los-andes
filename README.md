@@ -320,7 +320,9 @@ correo por su cuenta**: solo busca cuando escribes `/correo` por tu privado.
 1. Busca los correos de los últimos 30 días con asunto de factura de la DIAN («NIT;Empresa;Número;01;…») y un .zip, que
    no tengan la etiqueta «Obra registrada». La búsqueda no usa IA.
 2. Las que ya están en `Gastos` (mismo número) quedan etiquetadas y no vuelven a salir. Las demás llegan en una lista,
-   con un botón cada una.
+   con un botón cada una: fecha de la factura, establecimiento y total, leídos del XML por el script (sin IA). El
+   establecimiento es la tienda que trae el XML (Easy la trae); si no, el dominio del correo cuando lo manda la misma
+   empresa (`efacturahomecenter@homecenter.co` → Homecenter); si no, la razón social.
 3. Al tocar una: proveedor, NIT, número, fecha, total y cada producto salen exactos del XML. Una llamada corta de texto
    a Gemini (sin el PDF) pone el nombre comercial de la tienda, nombres legibles a los productos y el capítulo.
 4. La vista previa es la de Gastos, con cada producto así: «• Lavamanos ovalado blanco: $160.930 · _LAVAMANOS OVAL BLA_»

@@ -3,7 +3,8 @@
 //
 // Acciones (POST con JSON y el secreto):
 //   {accion: "buscar", dias: 30}  facturas electrónicas de la DIAN (asunto «NIT;Empresa;Número;01;…» con un .zip)
-//                                 de los últimos días que todavía no tienen la etiqueta
+//                                 de los últimos días que todavía no tienen la etiqueta, con el total, la fecha
+//                                 y la tienda leídos del XML (sin IA)
 //   {accion: "factura", id}       el PDF (en base64) y el XML de esa factura, sacados del .zip
 //   {accion: "marcar", id}        le pone la etiqueta al correo para que no vuelva a salir
 //
@@ -43,10 +44,11 @@ function buscar(dias) {
         return p.trim();
       });
       if (partes.length < 4 || partes[3] !== "01" || !/^\d{6,12}$/.test(partes[0])) continue;
-      const conZip = m.getAttachments().some(function (a) {
+      const zip = m.getAttachments().filter(function (a) {
         return /\.zip$/i.test(a.getName());
-      });
-      if (!conZip) continue;
+      })[0];
+      if (!zip) continue;
+      const datos = resumenXml(zip);
       facturas.push({
         id: m.getId(),
         fecha: m.getDate().toISOString(),
@@ -54,10 +56,38 @@ function buscar(dias) {
         empresa: partes[1].replace(/\s+/g, " "),
         numero: partes[2],
         remitente: m.getFrom(),
+        total: datos.total,
+        fechaFactura: datos.fecha,
+        tienda: datos.tienda,
       });
     }
   }
   return { facturas: facturas };
+}
+
+/** Total a pagar, fecha y tienda del vendedor, leídos del XML del .zip (si no se puede, quedan en null). */
+function resumenXml(zip) {
+  try {
+    const xml = Utilities.unzip(zip.copyBlob().setContentType("application/zip")).filter(function (b) {
+      return /\.xml$/i.test(b.getName());
+    })[0];
+    if (!xml) return { total: null, fecha: null, tienda: null };
+    // Solo la factura (Invoice): el AttachedDocument que la envuelve trae su propia fecha (la de validación).
+    const completo = xml.getDataAsString("UTF-8");
+    const inicio = completo.indexOf("<Invoice");
+    const texto = inicio >= 0 ? completo.slice(inicio) : completo;
+    const total = texto.match(/<cbc:PayableAmount[^>]*>([\d.]+)<\/cbc:PayableAmount>/);
+    const fecha = texto.match(/<cbc:IssueDate>(\d{4}-\d{2}-\d{2})<\/cbc:IssueDate>/);
+    const vendedor = texto.match(/<cac:AccountingSupplierParty>([\s\S]*?)<\/cac:AccountingSupplierParty>/);
+    const tienda = vendedor && vendedor[1].match(/<cac:PhysicalLocation>\s*<cbc:Name>([^<]+)<\/cbc:Name>/);
+    return {
+      total: total ? Math.round(Number(total[1])) : null,
+      fecha: fecha ? fecha[1] : null,
+      tienda: tienda ? tienda[1].trim() : null,
+    };
+  } catch (_) {
+    return { total: null, fecha: null, tienda: null };
+  }
 }
 
 function factura(id) {
