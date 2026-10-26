@@ -28,6 +28,7 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 
 ```
 semillas/                 CSV de cada pestaña, catálogo fotos_antes.json, facturas_esperadas.csv
+apps-script/              correo.gs: el Apps Script de /correo (va en tu cuenta de Google)
 scripts/                  Scripts locales: ids de Telegram, crear la hoja, OAuth de Drive, webhook, validar la IA
 supabase/migrations/      Tablas técnicas (updates, sesiones, álbumes, reintentos, errores)
 supabase/functions/
@@ -311,6 +312,58 @@ cron y muestra qué mandó. Escribe de verdad: manda los mensajes y marca `aviso
 
 Al terminar, borra en `Esperado` los `aviso_enviado` que marcaron las pruebas.
 
+### Facturas del correo (/correo)
+
+Las facturas electrónicas llegan a tu Gmail con un .zip que trae el PDF y el XML de la DIAN. El bot **no revisa el
+correo por su cuenta**: solo busca cuando escribes `/correo` por tu privado.
+
+1. Busca los correos de los últimos 30 días con asunto de factura de la DIAN («NIT;Empresa;Número;01;…») y un .zip, que
+   no tengan la etiqueta «Obra registrada». La búsqueda no usa IA.
+2. Las que ya están en `Gastos` (mismo número) quedan etiquetadas y no vuelven a salir. Las demás llegan en una lista,
+   con un botón cada una.
+3. Al tocar una: proveedor, NIT, número, fecha, total y cada producto salen exactos del XML. Una llamada corta de texto
+   a Gemini (sin el PDF) pone el nombre comercial de la tienda, nombres legibles a los productos y el capítulo.
+4. La vista previa es la de Gastos, con cada producto así: «• Lavamanos ovalado blanco: $160.930 · _LAVAMANOS OVAL BLA_»
+   (el nombre de la IA y, en cursiva, la descripción de la factura). «Caja menor» o «Pagó Carlos», «Corregir campo» y
+   «Sí, guardar».
+5. Al guardar: el PDF va a Drive `Facturas/`, la fila a `Gastos`, cada producto a `Productos` (con `producto` = nombre
+   de la IA y `descripcion_factura` = como viene en la factura) y el correo queda con la etiqueta.
+
+En el XML, cada línea es su valor sin impuestos más el IVA, con centavos. El bot redondea las líneas para que sumen
+exacto el total a pagar; alguna puede quedar a $1 de lo que muestra el PDF.
+
+**Puesta en marcha** (una sola vez):
+
+1. `git pull`, `deno task test` y `deno task crear-hoja` (agrega la columna `descripcion_factura` al final de
+   `Productos`; puedes moverla al lado de `producto`, el bot la busca por el nombre).
+2. `deno task secreto-correo`: guarda `GMAIL_SCRIPT_SECRET` en `.env.local`.
+3. En <https://script.google.com> → **Nuevo proyecto**. Ponle de nombre «Bot obra – correo». Borra lo que trae
+   `Código.gs`, pega todo `apps-script/correo.gs` y guarda.
+4. ⚙ **Configuración del proyecto** → **Propiedades de la secuencia de comandos** → **Agregar**: propiedad `SECRETO`,
+   valor = el de `GMAIL_SCRIPT_SECRET` en `.env.local`. Guarda.
+5. **Implementar** → **Nueva implementación** → tipo **Aplicación web**. «Ejecutar como»: **Yo**. «Quién tiene acceso»:
+   **Cualquier usuario** (sin el secreto no responde nada). **Implementar** y autoriza el acceso a Gmail con tu cuenta
+   (si sale «Google no verificó esta app»: _Configuración avanzada_ → _Ir a Bot obra – correo_).
+6. Copia la **URL de la aplicación web** (termina en `/exec`) en `GMAIL_SCRIPT_URL` de `.env.local` y corre
+   `deno task secretos`.
+7. Despliega las dos funciones y el menú:
+   ```
+   npx supabase functions deploy telegram --use-api
+   npx supabase functions deploy programado --use-api
+   deno task webhook
+   ```
+
+Si cambias `correo.gs`, en Apps Script: **Implementar** → **Gestionar implementaciones** → editar → versión **Nueva
+versión**. Así la URL no cambia.
+
+**Prueba:**
+
+- `/correo` por tu privado. Las 4 facturas de la semilla que estén en los últimos 30 días ya están en `Gastos`: deben
+  quedar etiquetadas en Gmail y no salir en la lista.
+- Con una factura nueva: tócala, revisa la vista previa (productos, total, capítulo), elige el pago y «Sí, guardar».
+  Revisa `Gastos`, `Productos` (las dos columnas de nombre), el PDF en Drive y la etiqueta en Gmail.
+- Otra vez `/correo`: ya no sale.
+
 ## Uso diario
 
 - **Cambiar el modelo de Gemini:** `npx supabase secrets set GEMINI_MODEL=<modelo>` (o `GEMINI_MODEL_FALLBACK`). No hay
@@ -322,6 +375,9 @@ Al terminar, borra en `Esperado` los `aviso_enviado` que marcaron las pruebas.
   desplegar `telegram`. Una prueba falla si las dos copias no son iguales.
 - **Pruebas:** `deno task test`. Revisión de tipos: `deno task check`.
 - **Errores:** quedan en la tabla `errores` y te llega una línea por privado. Tu hermano nunca ve detalles técnicos.
+- **Si un mensaje se queda en «Un momento…»:** si Telegram pide esperar (429), el bot espera y reintenta; si Gemini no
+  responde en 60 s, da un error. Lo que haya fallado queda en la tabla `errores`, y en los registros de la función queda
+  cuánto tardó cada llamada a Gemini (Edge Functions → telegram → Logs).
 - **Horas de los avisos:** las fija el cron, no `Config` (las horas de `Config` son de referencia). Para cambiarlas, en
   el SQL Editor, en UTC (Bogotá + 5 h):
   `select cron.alter_job(job_id := (select jobid from cron.job where jobname = 'programado-diario'), schedule := '0 23 * * 1-6');`
@@ -355,8 +411,9 @@ Si cambias una semilla allá, cópiala aquí y vuelve a cargarla con `deno task 
 - `fotos_antes.json`: catálogo F01–F24 con encuadre, tareas e hitos.
 - `Gastos.csv` y `Pagos.csv`: lo pagado antes de la obra, con `cuenta_12M = no`.
 - `Productos.csv`: un producto por línea de cada factura, con `numero_factura` y `enlace_factura` para cruzarlo con
-  `Gastos`. Trae los 38 productos de las 4 facturas reales (leídos de los PDF; cada factura suma su total).
-  `valor_total` es lo pagado por la línea (con IVA y descuento) y `valor_unitario` es `valor_total / cantidad`.
+  `Gastos`. `producto` es el nombre legible y `descripcion_factura` la descripción tal como viene en la factura. Trae
+  los 38 productos de las 4 facturas reales (leídos de los PDF; cada factura suma su total). `valor_total` es lo pagado
+  por la línea (con IVA y descuento) y `valor_unitario` es `valor_total / cantidad`.
 - `facturas_esperadas.csv`: los valores de las 4 facturas reales para la fase 2.
 - `Reportes.csv`: solo encabezados. Una fila por día: resumen, tareas terminadas (`02-05`), avance de la obra contra el
   cronograma (`avance_obra_pct`, `avance_esperado_pct`, `desvio_pct`, ponderados por los días de cada tarea), lo que

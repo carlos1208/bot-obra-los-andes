@@ -2,11 +2,19 @@
 // «Sí, guardar» o «Corregir campo». Nada se escribe en la hoja hasta «Sí, guardar».
 // La factura se sube a Drive «Facturas/», el enlace queda en la fila de Gastos y cada producto
 // va en una fila de Productos con el mismo número de factura y enlace.
+// Las facturas del correo (/correo) llegan con el XML de la DIAN: los valores salen de ahí, sin leer el PDF.
 
 import { claimStep, deleteSession, readSession, saveSession, type Session } from "../../_shared/db.ts";
 import { FOLDERS, topFolder, uploadFile } from "../../_shared/drive.ts";
 import { envNumber } from "../../_shared/env.ts";
-import { extractInvoice, extractNoInvoicePurchase, type InvoiceLine } from "../../_shared/extractors.ts";
+import { parseDianInvoice } from "../../_shared/dian.ts";
+import { reportError } from "../../_shared/errors.ts";
+import {
+  extractInvoice,
+  extractNoInvoicePurchase,
+  type InvoiceLine,
+  nameInvoiceLines,
+} from "../../_shared/extractors.ts";
 import {
   cellDate,
   cellNumber,
@@ -19,6 +27,7 @@ import {
   todayISO,
 } from "../../_shared/format.ts";
 import { lineEditText, linesTotal, lineText, parseLines } from "../../_shared/products.ts";
+import { fetchMailInvoice, markMailInvoice } from "../../_shared/mail.ts";
 import { appendRow, appendRows, readTabs } from "../../_shared/sheets.ts";
 import { budgetChapters, type Config, pettyCashBalance, readConfig, type Row } from "../../_shared/site.ts";
 import {
@@ -62,7 +71,8 @@ const ASK_FIELD: Partial<Record<Field, string>> = {
 
 interface Draft {
   noInvoice: boolean;
-  file: ReceivedImage;
+  file?: ReceivedImage; // foto o PDF que llegó por Telegram
+  mail?: { id: string }; // o la factura del correo (el PDF se vuelve a pedir al guardar)
   supplier: string;
   tax_id: string;
   date: string; // "" = falta
@@ -179,6 +189,45 @@ export async function receiveInvoice(ctx: Context, file: ReceivedImage, back?: R
   await showPreview(ctx, { back, draft }, wait.message_id);
 }
 
+/** Factura elegida en /correo: valores exactos del XML y una llamada corta a Gemini para los nombres. */
+export async function receiveMailInvoice(ctx: Context, mailId: string): Promise<void> {
+  const wait = await ctx.reply("Leyendo la factura del correo…");
+  const mail = await fetchMailInvoice(mailId);
+  if (!mail.xml) {
+    await editMessageText(ctx.chatId, wait.message_id, "Ese correo no trae el XML de la factura. Mándame el PDF.");
+    return;
+  }
+  const inv = parseDianInvoice(mail.xml);
+  const { Presupuesto, Gastos } = await readTabs(["Presupuesto", "Gastos"]);
+  const naming = await nameInvoiceLines(
+    { legalName: inv.legalName, tradeName: inv.tradeName, storeName: inv.storeName, email: mail.sender },
+    inv.lines.map((l) => l.printed),
+    budgetChapters(Presupuesto),
+  );
+  const draft: Draft = {
+    noInvoice: false,
+    mail: { id: mailId },
+    supplier: naming.supplier.trim() || inv.tradeName || inv.legalName,
+    tax_id: inv.taxId,
+    date: inv.date,
+    number: inv.number,
+    products: inv.lines.map((l, i) => ({
+      name: naming.names[i],
+      printed: l.printed,
+      quantity: l.quantity,
+      unit: l.unit,
+      total: l.total,
+    })),
+    items: "",
+    total: inv.total,
+    chapter: naming.chapter,
+    payment: "",
+    note: "",
+  };
+  draft.duplicate = duplicateWarning(draft, Gastos);
+  await showPreview(ctx, { draft }, wait.message_id);
+}
+
 async function startNoInvoice(ctx: Context, data: Data, messageId: number): Promise<void> {
   const { Config, Gastos } = await readTabs(["Config", "Gastos"]);
   const cfg = readConfig(Config);
@@ -245,7 +294,11 @@ const MAX_SHOWN_PRODUCTS = 40;
 
 function productLines(d: Draft): string[] {
   if (!d.products.length) return ["Productos: <i>falta</i>"];
-  const shown = d.products.slice(0, MAX_SHOWN_PRODUCTS).map((l) => `• ${escapeHtml(short(lineText(l), 70))}`);
+  const shown = d.products.slice(0, MAX_SHOWN_PRODUCTS).map((l) => {
+    // La descripción de la factura, si la IA le puso otro nombre: así se ve qué leyó y qué entendió.
+    const printed = l.printed && normalize(l.printed) !== normalize(l.name) ? ` · <i>${escapeHtml(l.printed)}</i>` : "";
+    return `• ${escapeHtml(short(lineText(l), 70))}${printed}`;
+  });
   const more = d.products.length - shown.length;
   return [`Productos (${d.products.length}):`, ...shown, ...(more > 0 ? [`… y ${more} más`] : [])];
 }
@@ -528,7 +581,10 @@ async function setField(ctx: Context, data: Data, text: string): Promise<void> {
       );
       return;
     }
-    d.products = got.lines;
+    // Si quedan las mismas líneas, cada una conserva la descripción de la factura.
+    d.products = got.lines.map((l, i) =>
+      got.lines.length === d.products.length && d.products[i].printed ? { ...l, printed: d.products[i].printed } : l
+    );
   } else if (field === "supplier" || field === "tax_id" || field === "number" || field === "items") {
     d[field] = text;
   }
@@ -547,7 +603,7 @@ function invoiceFileName(d: Draft): string {
   const name = d.noInvoice
     ? `${d.date} ${supplier} sin factura - ${total}`
     : `${d.date} ${supplier} ${clean(d.number) || "sin número"} - ${total}`;
-  return `${name}.${d.file.extension}`;
+  return `${name}.${d.file?.extension ?? "pdf"}`;
 }
 
 async function saveExpense(ctx: Context, session: Session<Data>, messageId: number): Promise<void> {
@@ -602,9 +658,15 @@ async function saveExpense(ctx: Context, session: Session<Data>, messageId: numb
     }
     if (d.link === undefined) {
       const folder = await topFolder(FOLDERS.invoices);
-      const { bytes } = await downloadFile(d.file.fileId);
-      const uploaded = await uploadFile({ name: invoiceFileName(d), parent: folder.id, mimeType: d.file.mime, bytes });
-      d.link = uploaded.webViewLink ?? "";
+      const pdf = d.mail ? (await fetchMailInvoice(d.mail.id)).pdf : null;
+      const bytes = d.file ? (await downloadFile(d.file.fileId)).bytes : pdf;
+      if (bytes) {
+        const mimeType = d.file?.mime ?? "application/pdf";
+        const uploaded = await uploadFile({ name: invoiceFileName(d), parent: folder.id, mimeType, bytes });
+        d.link = uploaded.webViewLink ?? "";
+      } else {
+        d.link = ""; // correo sin PDF: queda el registro sin archivo
+      }
     }
     if (!d.expenseSaved) {
       await appendRow("Gastos", {
@@ -632,6 +694,8 @@ async function saveExpense(ctx: Context, session: Session<Data>, messageId: numb
   }
 
   await editMessageText(ctx.chatId, messageId, `${previewText(d, undefined, true)}\n\n✅ Guardado.`);
+  // El correo queda con la etiqueta para que no vuelva a salir en /correo (si falla, el gasto ya quedó).
+  if (d.mail) await markMailInvoice(d.mail.id).catch((e) => reportError("etiquetar la factura del correo", e));
   const fresh = await readTabs(["Gastos", "Pagos"]);
   const balance = pettyCashBalance(cfg, fresh.Gastos, fresh.Pagos);
   const where = d.supplier ? ` en ${escapeHtml(d.supplier)}` : "";
@@ -650,6 +714,7 @@ function productRows(d: Draft): Record<string, unknown>[] {
     proveedor: d.supplier,
     numero_factura: d.number,
     producto: l.name,
+    descripcion_factura: l.printed ?? "",
     cantidad: l.quantity,
     unidad: l.unit,
     valor_unitario: l.total === null ? "" : Math.round(l.total / l.quantity),

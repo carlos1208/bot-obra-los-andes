@@ -15,6 +15,7 @@ import * as afterPhotos from "./agents/after_photos.ts";
 import * as beforePhotos from "./agents/before_photos.ts";
 import * as expenses from "./agents/expenses.ts";
 import { interpret } from "./agents/interpret.ts";
+import * as mailInvoices from "./agents/mail_invoices.ts";
 import * as milestones from "./agents/milestones.ts";
 import * as payments from "./agents/payments.ts";
 import * as questions from "./agents/questions.ts";
@@ -28,6 +29,7 @@ const HELP = [
   "/reporte – reporte del día (tema Reportes)",
   "/gasto – registrar una compra (tema Gastos)",
   "/pago – registrar un pago o una reposición de caja menor (Carlos, por privado)",
+  "/correo – facturas electrónicas nuevas de tu Gmail (Carlos, por privado)",
   "/estado – semana de obra, tareas de hoy y disponible",
   "/antes – subir fotos ANTES (tu hermano: ANTES por imprevisto)",
   "/despues – subir fotos DESPUÉS",
@@ -58,6 +60,7 @@ export async function route(ctx: Context): Promise<void> {
     if (data.startsWith("val:")) return await afterPhotos.onValidation(ctx);
     if (data.startsWith("pag:")) return await payments.onButton(ctx);
     if (data.startsWith("hit:")) return await milestones.onButton(ctx);
+    if (data.startsWith("cor:")) return await mailInvoices.onButton(ctx);
     if (data.startsWith("que:")) return await answerQuestion(ctx);
     await answerCallback(ctx.callback.id, "Ese botón ya no está activo.");
     return;
@@ -74,6 +77,7 @@ export async function route(ctx: Context): Promise<void> {
   if (command === "despues") return await afterPhotos.start(ctx);
   if (command === "pendientes") return await afterPhotos.pending(ctx);
   if (command === "pago") return await payments.start(ctx);
+  if (command === "correo") return await mailInvoices.start(ctx);
   if (command) {
     // /start, /ayuda y los comandos que todavía no existen.
     if (ctx.place === "private") await ctx.reply(HELP);

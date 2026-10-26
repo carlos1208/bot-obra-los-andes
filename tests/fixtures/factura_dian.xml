@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Factura de prueba con la estructura de la DIAN (UBL 2.1): datos inventados. -->
+<AttachedDocument xmlns="urn:oasis:names:specification:ubl:schema:xsd:AttachedDocument-2"
+  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:ID>AD-MC1234</cbc:ID>
+  <cac:SenderParty>
+    <cac:PartyTaxScheme>
+      <cbc:RegistrationName>MATERIALES DEL CARIBE S.A.S.</cbc:RegistrationName>
+    </cac:PartyTaxScheme>
+  </cac:SenderParty>
+  <cac:Attachment>
+    <cac:ExternalReference>
+      <cbc:MimeCode>text/xml</cbc:MimeCode>
+      <cbc:Description>
+        <![CDATA[<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:ID>MC1234</cbc:ID>
+  <cbc:IssueDate>2026-10-27</cbc:IssueDate>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyName><cbc:Name>Materiales  del Caribe S.A.S.</cbc:Name></cac:PartyName>
+      <cac:PhysicalLocation><cbc:Name>MATERIALES DEL CARIBE CENTRO</cbc:Name><cac:Address><cbc:ID>08001</cbc:ID></cac:Address></cac:PhysicalLocation>
+      <cac:PartyTaxScheme>
+        <cbc:RegistrationName>MATERIALES DEL CARIBE S.A.S.</cbc:RegistrationName>
+        <cbc:CompanyID schemeID="7" schemeName="31">901234567</cbc:CompanyID>
+      </cac:PartyTaxScheme>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="COP">313571.61</cbc:LineExtensionAmount>
+    <cbc:TaxInclusiveAmount currencyID="COP">360420.22</cbc:TaxInclusiveAmount>
+    <cbc:PayableRoundingAmount currencyID="COP">-0.22</cbc:PayableRoundingAmount>
+    <cbc:PayableAmount currencyID="COP">360420.00</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+  <cac:InvoiceLine>
+    <cbc:ID>1</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="NIU">1.0000</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="COP">135235.00</cbc:LineExtensionAmount>
+    <cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator><cbc:Amount currencyID="COP">68970</cbc:Amount></cac:AllowanceCharge>
+    <cac:TaxTotal>
+      <cbc:TaxAmount currencyID="COP">25694.65</cbc:TaxAmount>
+      <cac:TaxSubtotal><cbc:TaxAmount currencyID="COP">25694.65</cbc:TaxAmount><cac:TaxCategory><cbc:Percent>19.00</cbc:Percent></cac:TaxCategory></cac:TaxSubtotal>
+    </cac:TaxTotal>
+    <cac:Item><cbc:Description>LAVAMANOS OVAL BLA</cbc:Description></cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="COP">204205.00</cbc:PriceAmount></cac:Price>
+  </cac:InvoiceLine>
+  <cac:InvoiceLine>
+    <cbc:ID>2</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="MTK">2.5000</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="COP">84033.61</cbc:LineExtensionAmount>
+    <cac:TaxTotal>
+      <cbc:TaxAmount currencyID="COP">15966.39</cbc:TaxAmount>
+      <cac:TaxSubtotal><cbc:TaxAmount currencyID="COP">15966.39</cbc:TaxAmount></cac:TaxSubtotal>
+    </cac:TaxTotal>
+    <cac:Item><cbc:Description>PISO CERAM  60X60 BLC</cbc:Description></cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="COP">33613.44</cbc:PriceAmount></cac:Price>
+  </cac:InvoiceLine>
+  <cac:InvoiceLine>
+    <cbc:ID>3</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="NIU">1.0000</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="COP">67000.00</cbc:LineExtensionAmount>
+    <cac:Item><cbc:Description>SV FLETE ADICIONAL</cbc:Description></cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="COP">67000.00</cbc:PriceAmount></cac:Price>
+  </cac:InvoiceLine>
+  <cac:InvoiceLine>
+    <cbc:ID>4</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="94">1.0000</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="COP">27303.00</cbc:LineExtensionAmount>
+    <cac:TaxTotal>
+      <cbc:TaxAmount currencyID="COP">5187.57</cbc:TaxAmount>
+      <cac:TaxSubtotal><cbc:TaxAmount currencyID="COP">5187.57</cbc:TaxAmount></cac:TaxSubtotal>
+    </cac:TaxTotal>
+    <cac:Item><cbc:Description>KIT SIFON FLEXIBLE</cbc:Description></cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="COP">27303.00</cbc:PriceAmount></cac:Price>
+  </cac:InvoiceLine>
+</Invoice>]]>
+      </cbc:Description>
+    </cac:ExternalReference>
+  </cac:Attachment>
+</AttachedDocument>

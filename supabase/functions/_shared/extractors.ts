@@ -6,6 +6,8 @@ import { generateJson, type InlineFile, type Part } from "./gemini.ts";
 /** Una línea de la factura: producto o servicio. */
 export interface InvoiceLine {
   name: string;
+  /** Descripción tal como viene en la factura, para auditar el nombre que puso la IA. */
+  printed?: string;
   quantity: number;
   unit: string;
   total: number | null; // lo pagado por la línea, en pesos enteros
@@ -31,6 +33,7 @@ const INVOICE_INSTRUCTIONS =
 - tax_id: NIT del vendedor como aparece (p. ej. 800.242.106-2). No el documento del cliente.
 - products: cada línea de la factura, en el orden impreso, también fletes, transporte, cortes y otros servicios. No son líneas los subtotales, el IVA, los descuentos generales ni las formas de pago.
   - name: nombre corto y claro en español, con la medida o la presentación si la trae (p. ej. «Pintura blanca de 1 galón»). Sin código de barras ni SKU. Si una abreviatura no se entiende, déjala como está impresa.
+  - printed: la descripción tal como está impresa en la factura, sin el código de barras ni el SKU.
   - quantity: la cantidad de la línea («3.0000» es 3).
   - unit: «und» si la factura dice NIU, UND, UN o no dice nada; «m2» para MTK o M2; «m» para MTR; «kg» para KGM; si no, la unidad impresa en minúscula.
   - total: lo que se pagó por la línea, en pesos enteros: con IVA y ya restado el descuento o ahorro de esa línea. Suele ser el último valor de la línea (valor total o subtotal con impuesto), no el precio unitario de lista. Si no se ve, null.
@@ -56,11 +59,12 @@ function invoiceSchema(chapters: string[]): Record<string, unknown> {
           type: "object",
           properties: {
             name: { type: "string", description: "Producto o servicio" },
+            printed: { type: "string", description: "Descripción tal como está impresa" },
             quantity: { type: "number", description: "Cantidad" },
             unit: { type: "string", description: "Unidad: und, m2, m, kg…" },
             total: nullable("integer", "Pagado por la línea, con IVA y descuento, en pesos enteros"),
           },
-          required: ["name", "quantity", "unit", "total"],
+          required: ["name", "printed", "quantity", "unit", "total"],
         },
       },
       total: nullable("integer", "Total a pagar en pesos enteros"),
@@ -337,4 +341,52 @@ export async function answerQuestion(question: string, data: string, model?: str
     model,
   });
   return got.answer;
+}
+
+// --- Facturas del correo (XML de la DIAN) ---------------------------------------
+
+export interface InvoiceNaming {
+  supplier: string;
+  names: string[];
+  chapter: string;
+}
+
+const NAMING_INSTRUCTIONS =
+  `Recibes los datos de una factura electrónica de compra de una obra en Colombia, ya leídos de su XML. No calcules nada: solo nombra.
+- supplier: el nombre comercial corto de la tienda, el que usa la gente (p. ej. por la tienda o el correo del vendedor), no la razón social.
+- names: por cada descripción, en el mismo orden y la misma cantidad, un nombre corto y claro en español con la medida o la presentación si la trae. Si una abreviatura no se entiende, déjala como está.
+- chapter: el capítulo del presupuesto que mejor encaja con lo comprado.`;
+
+/** Una llamada corta de texto: nombre comercial, nombres legibles de los productos y capítulo. */
+export async function nameInvoiceLines(
+  seller: { legalName: string; tradeName: string; storeName: string | null; email: string },
+  printed: string[],
+  chapters: string[],
+  model?: string,
+): Promise<InvoiceNaming> {
+  const got = await generateJson<InvoiceNaming>({
+    instructions: NAMING_INSTRUCTIONS,
+    parts: [
+      [
+        `Razón social: ${seller.legalName}`,
+        seller.tradeName && seller.tradeName !== seller.legalName ? `Nombre en la factura: ${seller.tradeName}` : "",
+        seller.storeName ? `Tienda: ${seller.storeName}` : "",
+        seller.email ? `Correo del vendedor: ${seller.email}` : "",
+      ].filter(Boolean).join("\n"),
+      ["Descripciones:", ...printed.map((p, i) => `${i + 1}. ${p}`)].join("\n"),
+    ],
+    schema: {
+      type: "object",
+      properties: {
+        supplier: { type: "string", description: "Nombre comercial de la tienda" },
+        names: { type: "array", items: { type: "string" }, minItems: printed.length, maxItems: printed.length },
+        chapter: oneOf(chapters, "Capítulo del presupuesto"),
+      },
+      required: ["supplier", "names", "chapter"],
+    },
+    model,
+  });
+  // Si no devolvió un nombre por descripción, quedan las descripciones tal como vienen.
+  const names = got.names.length === printed.length ? got.names : printed;
+  return { ...got, names: names.map((n, i) => n.trim() || printed[i]) };
 }

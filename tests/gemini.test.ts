@@ -110,7 +110,7 @@ Deno.test("la factura usa los capítulos de Presupuesto y el modelo pedido", asy
   const schema = calls[0].body.generationConfig.responseFormat.text.schema;
   assertEquals(schema.properties.chapter.enum, ["Drywall", "Materiales de obra y pintura"]);
   assertEquals(schema.properties.total.type, ["integer", "null"]);
-  assertEquals(schema.properties.products.items.required, ["name", "quantity", "unit", "total"]);
+  assertEquals(schema.properties.products.items.required, ["name", "printed", "quantity", "unit", "total"]);
   assert(calls[0].url.includes("/models/modelo-respaldo:"));
 });
 

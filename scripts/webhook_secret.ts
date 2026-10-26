@@ -1,9 +1,10 @@
 // Genera un secreto y lo guarda en .env.local (no lo muestra).
 // Uso: deno task secreto                (TELEGRAM_WEBHOOK_SECRET)
 //      deno task secreto-programado     (PROGRAMADO_SECRET, fase 6)
+//      deno task secreto-correo         (GMAIL_SCRIPT_SECRET, facturas del correo)
 import { saveToEnv } from "./_env.ts";
 
-const NAMES = ["TELEGRAM_WEBHOOK_SECRET", "PROGRAMADO_SECRET"];
+const NAMES = ["TELEGRAM_WEBHOOK_SECRET", "PROGRAMADO_SECRET", "GMAIL_SCRIPT_SECRET"];
 const name = Deno.args[0] ?? "TELEGRAM_WEBHOOK_SECRET";
 if (!NAMES.includes(name)) {
   console.error(`Solo genero ${NAMES.join(" o ")}.`);

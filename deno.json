@@ -9,6 +9,7 @@
     "webhook": "deno run --allow-net --allow-read --allow-env scripts/set_webhook.ts",
     "secreto": "deno run --allow-read --allow-write --allow-env scripts/webhook_secret.ts",
     "secreto-programado": "deno run --allow-read --allow-write --allow-env scripts/webhook_secret.ts PROGRAMADO_SECRET",
+    "secreto-correo": "deno run --allow-read --allow-write --allow-env scripts/webhook_secret.ts GMAIL_SCRIPT_SECRET",
     "revisar": "deno run --allow-read --allow-env scripts/check_env.ts",
     "secretos": "deno run --allow-read --allow-write --allow-env --allow-run scripts/push_secrets.ts",
     "validar-ia": "deno run --allow-net --allow-read --allow-env scripts/validate_ai.ts",

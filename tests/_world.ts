@@ -29,6 +29,8 @@ const secrets: Record<string, string> = {
   GEMINI_API_KEY: "gem",
   GEMINI_MODEL: "modelo",
   GEMINI_MODEL_FALLBACK: "respaldo",
+  GMAIL_SCRIPT_URL: "https://script.google.com/macros/s/prueba/exec",
+  GMAIL_SCRIPT_SECRET: "secreto-correo",
 };
 for (const [k, v] of Object.entries(secrets)) Deno.env.set(k, v);
 const keyPair = await crypto.subtle.generateKey(
@@ -278,6 +280,40 @@ function telegram(url: URL, init: RequestInit): Response {
   return Response.json({ ok: true, result: true });
 }
 
+// --- Apps Script del correo ------------------------------------------------------------
+export interface FakeMail {
+  id: string;
+  fecha: string;
+  nit: string;
+  empresa: string;
+  numero: string;
+  remitente: string;
+  xml: string | null;
+  pdf: string | null; // base64
+}
+/** Buzón de Carlos para /correo: facturas sin etiquetar, las que se etiquetaron y las acciones pedidas. */
+export const mailbox = { invoices: [] as FakeMail[], marked: [] as string[], calls: [] as string[] };
+
+function appsScript(init: RequestInit): Response {
+  const body = JSON.parse(String(init.body));
+  if (body.secreto !== secrets.GMAIL_SCRIPT_SECRET) return Response.json({ error: "no autorizado" });
+  mailbox.calls.push(body.accion);
+  const visible = mailbox.invoices.filter((m) => !mailbox.marked.includes(m.id));
+  if (body.accion === "buscar") {
+    return Response.json({ facturas: visible.map(({ xml: _x, pdf: _p, ...m }) => m) });
+  }
+  const mail = mailbox.invoices.find((m) => m.id === body.id);
+  if (!mail) return Response.json({ error: "no existe" });
+  if (body.accion === "factura") {
+    return Response.json({ id: mail.id, remitente: mail.remitente, pdf: mail.pdf, xml: mail.xml });
+  }
+  if (body.accion === "marcar") {
+    mailbox.marked.push(mail.id);
+    return Response.json({ ok: true });
+  }
+  return Response.json({ error: "acción desconocida" });
+}
+
 // --- Gemini ----------------------------------------------------------------------
 function geminiApi(url: URL, init: RequestInit): Response {
   const model = decodeURIComponent(url.pathname.split("/").pop()!).split(":")[0];
@@ -306,6 +342,8 @@ globalThis.fetch = async (input: string | URL | Request, init: RequestInit = {})
       return telegram(url, init);
     case "generativelanguage.googleapis.com":
       return geminiApi(url, init);
+    case "script.google.com":
+      return appsScript(init);
   }
   throw new Error(`fetch inesperado: ${url}`);
 };
