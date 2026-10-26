@@ -15,14 +15,14 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 
 ## Estado por fases
 
-| Fase                   | Qué incluye                                                                                                     | Estado        |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------- | ------------- |
-| 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista         |
-| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista         |
-| 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | Lista         |
-| 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre», pares en el reporte                    | Lista         |
-| 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Lista         |
-| 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | **En prueba** |
+| Fase                   | Qué incluye                                                                                                     | Estado |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------- | ------ |
+| 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista  |
+| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista  |
+| 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | Lista  |
+| 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre», pares en el reporte                    | Lista  |
+| 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Lista  |
+| 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Lista  |
 
 ## Estructura
 
