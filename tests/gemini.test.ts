@@ -1,6 +1,6 @@
 // Cliente de Gemini y extractores con la API simulada.
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
-import { GeminiError, generateJson, isQuotaError } from "../supabase/functions/_shared/gemini.ts";
+import { GeminiError, geminiTiming, generateJson, isQuotaError } from "../supabase/functions/_shared/gemini.ts";
 import { extractInvoice, summarizeNote } from "../supabase/functions/_shared/extractors.ts";
 import { checkInvoice, matchExpected, parseExpected } from "../scripts/_invoice_check.ts";
 
@@ -14,9 +14,16 @@ interface Call {
 }
 let calls: Call[] = [];
 let reply: () => Response = () => Response.json({});
+/** Si es true, la API no responde nunca (hasta que se cancele la solicitud). */
+let hang = false;
 
 globalThis.fetch = async (input: string | URL | Request, init: RequestInit = {}) => {
   calls.push({ url: String(input), headers: new Headers(init.headers), body: JSON.parse(String(init.body)) });
+  if (hang) {
+    return await new Promise<Response>((_, reject) =>
+      init.signal?.addEventListener("abort", () => reject(init.signal!.reason))
+    );
+  }
   return await Promise.resolve(reply());
 };
 
@@ -138,4 +145,21 @@ Deno.test("compara número, fecha y total con facturas_esperadas.csv", async () 
   assertEquals(matchExpected(expected, { ...got, number: "5212100268554" })?.total, 19900);
   assertEquals(matchExpected(expected, { ...got, number: null, total: 215700 })?.numero, "5209100261757");
   assertEquals(matchExpected(expected, { ...got, number: "X1", total: 1 }), undefined);
+});
+
+Deno.test("si Gemini no responde a tiempo, falla con un error claro (no se queda colgado)", async () => {
+  hang = true;
+  geminiTiming.timeoutMs = 50;
+  try {
+    const e = await assertRejects(
+      () => generateJson({ instructions: "i", parts: ["hola"], schema: { type: "object" } }),
+      GeminiError,
+    );
+    assertEquals((e as GeminiError).status, 504);
+    assertEquals((e as GeminiError).message, "Gemini modelo-principal no respondió en 0.05 s");
+    assert(!isQuotaError(e));
+  } finally {
+    hang = false;
+    geminiTiming.timeoutMs = 60_000;
+  }
 });

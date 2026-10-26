@@ -70,26 +70,41 @@ export interface Button {
 
 export type Keyboard = Button[][];
 
-export async function tg<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-  const r = await fetch(`https://api.telegram.org/bot${env("TELEGRAM_BOT_TOKEN")}/${method}`, {
+/** Si Telegram pide esperar (429 con retry_after) hasta este tiempo, se espera y se reintenta. */
+export const telegramRetry = { maxWaitSeconds: 30, attempts: 2 };
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Hace la llamada y, con «Too Many Requests: retry after N», espera N segundos y la repite. */
+async function call<T>(method: string, init: () => RequestInit): Promise<T> {
+  for (let attempt = 0;; attempt++) {
+    const r = await fetch(`https://api.telegram.org/bot${env("TELEGRAM_BOT_TOKEN")}/${method}`, init());
+    const data = await r.json();
+    if (data.ok) return data.result as T;
+    const wait = data.parameters?.retry_after;
+    if (
+      r.status === 429 && typeof wait === "number" && wait <= telegramRetry.maxWaitSeconds &&
+      attempt < telegramRetry.attempts
+    ) {
+      console.log(`Telegram ${method}: 429, espero ${wait} s`);
+      await sleep(wait * 1000 + 100);
+      continue;
+    }
+    throw new Error(`Telegram ${method}: ${data.description ?? r.status}`);
+  }
+}
+
+export function tg<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+  return call<T>(method, () => ({
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
-  });
-  const data = await r.json();
-  if (!data.ok) throw new Error(`Telegram ${method}: ${data.description ?? r.status}`);
-  return data.result as T;
+  }));
 }
 
 /** Llamada con multipart/form-data (para subir archivos). */
-async function tgForm<T = unknown>(method: string, form: FormData): Promise<T> {
-  const r = await fetch(`https://api.telegram.org/bot${env("TELEGRAM_BOT_TOKEN")}/${method}`, {
-    method: "POST",
-    body: form,
-  });
-  const data = await r.json();
-  if (!data.ok) throw new Error(`Telegram ${method}: ${data.description ?? r.status}`);
-  return data.result as T;
+function tgForm<T = unknown>(method: string, form: FormData): Promise<T> {
+  return call<T>(method, () => ({ method: "POST", body: form }));
 }
 
 export interface Target {

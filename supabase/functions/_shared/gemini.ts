@@ -26,6 +26,9 @@ export class GeminiError extends Error {
 
 export const isQuotaError = (e: unknown): boolean => e instanceof GeminiError && e.status === 429;
 
+/** Tiempo máximo de una llamada: así un mensaje no se queda en «Un momento…» sin respuesta. */
+export const geminiTiming = { timeoutMs: 60_000 };
+
 export function primaryModel(): string {
   return env("GEMINI_MODEL");
 }
@@ -75,12 +78,24 @@ export async function generateJson<T>(opts: {
       responseFormat: { text: { mimeType: "APPLICATION_JSON", schema: opts.schema } },
     },
   };
-  const r = await fetch(`${BASE}/${encodeURIComponent(model)}:generateContent`, {
-    method: "POST",
-    headers: { "x-goog-api-key": env("GEMINI_API_KEY"), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const start = Date.now();
+  let r: Response;
+  try {
+    r = await fetch(`${BASE}/${encodeURIComponent(model)}:generateContent`, {
+      method: "POST",
+      headers: { "x-goog-api-key": env("GEMINI_API_KEY"), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(geminiTiming.timeoutMs),
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") {
+      throw new GeminiError(`Gemini ${model} no respondió en ${geminiTiming.timeoutMs / 1000} s`, 504);
+    }
+    throw e;
+  }
   const data = await r.json().catch(() => ({})) as GenerateResponse;
+  // Duración en los registros de la función, para revisar demoras (sin datos del mensaje).
+  console.log(`Gemini ${model}: ${r.status} en ${Date.now() - start} ms`);
   if (!r.ok) {
     throw new GeminiError(`Gemini ${model} ${r.status}: ${data.error?.message ?? r.statusText}`, r.status);
   }

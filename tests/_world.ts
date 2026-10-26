@@ -242,6 +242,8 @@ async function driveApi(url: URL, init: RequestInit): Promise<Response> {
 let nextBotMessage = 5000;
 /** Mensaje del bot con los botones más recientes: ahí «toca» tap(). */
 export let keyboardMessage = 0;
+/** Cuántas de las próximas llamadas a Telegram responden 429 (retry_after 0). */
+export const telegramFlood = { times: 0 };
 const hasKeyboard = (p: Record<string, unknown>) =>
   ((p.reply_markup as { inline_keyboard?: unknown[] } | undefined)?.inline_keyboard?.length ?? 0) > 0;
 
@@ -255,6 +257,14 @@ function telegram(url: URL, init: RequestInit): Response {
       files: [...init.body].filter(([, v]) => typeof v !== "string").length,
     }
     : JSON.parse(String(init.body ?? "{}"));
+  if (telegramFlood.times > 0) {
+    // Telegram pide esperar: «Too Many Requests: retry after N».
+    telegramFlood.times--;
+    return Response.json(
+      { ok: false, error_code: 429, description: "Too Many Requests: retry after 0", parameters: { retry_after: 0 } },
+      { status: 429 },
+    );
+  }
   sent.push({ method, params });
   if (method === "getFile") return Response.json({ ok: true, result: { file_path: `files/${params.file_id}` } });
   if (method === "sendMessage") {

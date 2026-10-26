@@ -18,6 +18,7 @@ import {
   sheet,
   tables,
   tap,
+  telegramFlood,
   timing,
   voice,
 } from "./_world.ts";
@@ -234,3 +235,16 @@ function addExpense(values: Record<string, unknown>) {
   const headers = sheet.Gastos[0] as string[];
   sheet.Gastos.push(headers.map((h) => values[h] ?? ""));
 }
+
+Deno.test("si Telegram pide esperar (429), el bot espera y la respuesta igual llega", async () => {
+  await resetSheet();
+  clearSent();
+  gemini.replies.push(question(["presupuesto"], true), { answer: "Quedan $12.000.000 de los 12 M." });
+  // La primera llamada a Telegram (el «Un momento…») recibe un 429.
+  telegramFlood.times = 1;
+  const before = sent.length;
+  await processUpdate(message(CARLOS, { text: "¿cuánto queda de los 12 M?" }));
+  assertEquals(sent.slice(before).filter((e) => e.method === "sendMessage")[0].params.text, "Un momento…");
+  assertEquals(lastText(), "Quedan $12.000.000 de los 12 M.\n\n<i>Dato de la hoja, 10:00</i>");
+  assertEquals(telegramFlood.times, 0);
+});
