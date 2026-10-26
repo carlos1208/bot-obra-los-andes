@@ -1,6 +1,22 @@
 // Fase 6: avisos programados con la fecha simulada (lunes, diario, festivo y cierre del sábado).
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
-import { CARLOS, clearSent, clock, drive, GROUP, REPORTS_TOPIC, resetSheet, rowsOf, sent, sheet } from "./_world.ts";
+import {
+  BROTHER,
+  buttons,
+  CARLOS,
+  clearSent,
+  clock,
+  drive,
+  GROUP,
+  lastText,
+  processUpdate,
+  REPORTS_TOPIC,
+  resetSheet,
+  rowsOf,
+  sent,
+  sheet,
+  tap,
+} from "./_world.ts";
 import { runJob } from "../supabase/functions/programado/jobs.ts";
 import { handler } from "../supabase/functions/programado/handler.ts";
 
@@ -54,34 +70,77 @@ Deno.test("lunes: objetivos y lo esperado de la semana, al tema Reportes y a Car
   assertEquals(messages().length, 0);
 });
 
-Deno.test("diario: lo esperado sin confirmar (una vez) y el recordatorio del reporte", async () => {
+Deno.test("diario: pendientes atrasados todos los días hasta que se marquen, y el recordatorio del reporte", async () => {
   await resetSheet();
   clearSent();
   on("2026-10-28");
   const result = await runJob("diario");
-  assertEquals(result.enviado, ["aviso de lo esperado sin confirmar (1)", "recordatorio del reporte"]);
-  const alert = "⚠️ <b>Lo esperado de hoy no está confirmado</b>\n• Viga instalada y puntales retirados (tarea 03)\n" +
-    "Confírmalo en el reporte del día, en «¿Llegó lo esperado hoy?».";
-  assertEquals(toCarlos(), [alert]);
-  assertEquals(toTopic(), [
-    alert,
+  assertEquals(result.enviado, ["recordatorio de pendientes atrasados (4)", "recordatorio del reporte"]);
+  const reminder = "⏰ <b>Pendientes atrasados</b> (se recuerdan cada día hasta que se marquen)\n\n" +
+    "<b>Lo esperado sin confirmar</b>\n" +
+    "• lun 26 oct (hace 2 días de obra): El albañil empieza la obra (tarea 02)\n" +
+    "• Hoy: Viga instalada y puntales retirados (tarea 03)\n\n" +
+    "<b>Tareas atrasadas</b>\n" +
+    "• 01 Aviso a la administración; compras de la semana 1: 2 días de atraso (fin lun 26 oct)\n" +
+    "• 02 Demoler parte alta del muro cocina-sala: 1 día de atraso (fin mar 27 oct)";
+  const [topic, reportReminder] = toTopic();
+  assertStringIncludes(topic, reminder);
+  assertStringIncludes(topic, "Se marcan en el reporte del día");
+  assertEquals(
+    reportReminder,
     "⏰ Todavía no hay reporte de hoy. Manda por aquí las notas del día (voz o texto) y toca «Cerrar el reporte».",
+  );
+  // En el tema, sin botones; a Carlos, con un botón por pendiente.
+  const topicMessage = messages().find((e) => e.params.chat_id === GROUP)!;
+  assertEquals(topicMessage.params.reply_markup, undefined);
+  assertStringIncludes(toCarlos()[0], `${reminder}\n\nToca lo que ya se hizo para marcarlo.`);
+  assertEquals(buttons().map((b) => b.split("|")[1]), ["atr:e:2", "atr:e:3", "atr:t:01", "atr:t:02"]);
+  assert(buttons()[0].startsWith("✅ Llegó: El albañil empieza la obra"));
+  assert(buttons()[2].startsWith("✅ Terminada: 01 Aviso"));
+  assertEquals(rowsOf("Esperado").filter((r) => r.aviso_enviado === "sí").map((r) => r.fecha), [
+    "2026-10-26",
+    "2026-10-28",
   ]);
-  assertEquals(rowsOf("Esperado").find((r) => r.fecha === "2026-10-28")!.aviso_enviado, "sí");
 
-  // Otra vez el mismo día, ya con el reporte: no repite el aviso ni el recordatorio.
+  // Carlos marca la tarea 01 y que llegó la viga (cada uno pregunta antes de escribir).
+  await processUpdate(tap(CARLOS, "atr:t:01"));
+  assertEquals(lastText(), "¿Marco la tarea 01 «Aviso a la administración; compras de la semana 1» como terminada?");
+  assertEquals(rowsOf("Tareas").find((r) => r.id === "01")!.estado, "pendiente");
+  await processUpdate(tap(CARLOS, "atr:T:01"));
+  assertEquals(rowsOf("Tareas").find((r) => r.id === "01")!.estado, "terminada");
+  assertStringIncludes(lastText(), "✅ Tarea 01 «Aviso a la administración; compras de la semana 1» terminada.");
+  await processUpdate(tap(CARLOS, "atr:e:3"));
+  assertEquals(lastText(), "¿Marco que llegó «Viga instalada y puntales retirados» (mié 28 oct)?");
+  await processUpdate(tap(CARLOS, "atr:E:3"));
+  const viga = rowsOf("Esperado").find((r) => r.fecha === "2026-10-28")!;
+  assertEquals([viga.llego, viga.confirmado_por], ["sí", "Carlos"]);
+  // Su hermano no puede marcar.
+  await processUpdate(tap(BROTHER, "atr:t:02"));
+  assertEquals(rowsOf("Tareas").find((r) => r.id === "02")!.estado, "pendiente");
+
+  // Al otro día se repite lo que sigue pendiente (no lo marcado).
   clearSent();
-  addRow("Reportes", { fecha: "2026-10-28", hora: "16:30", reportado_por: "Hermano" });
-  assertEquals((await runJob("diario")).enviado, ["nada: lo esperado está confirmado y ya hay reporte"]);
-  assertEquals(messages().length, 0);
+  addRow("Reportes", { fecha: "2026-10-29", hora: "16:30", reportado_por: "Hermano" });
+  on("2026-10-29");
+  assertEquals((await runJob("diario")).enviado, ["recordatorio de pendientes atrasados (4)"]);
+  const next = toCarlos()[0];
+  assertStringIncludes(next, "• lun 26 oct (hace 3 días de obra): El albañil empieza la obra (tarea 02)");
+  assertStringIncludes(next, "• 02 Demoler parte alta del muro cocina-sala: 2 días de atraso (fin mar 27 oct)");
+  assertStringIncludes(next, "• 03 Pintar viga de acero"); // terminaba el 28: ahora está atrasada
+  assert(!next.includes("01 Aviso"));
+  assert(!next.includes("Viga instalada"));
 });
 
-Deno.test("diario: lo que se marcó «no llegó» no se vuelve a avisar; festivo y domingo, sin avisos", async () => {
+Deno.test("diario: «no llegó» se sigue recordando hasta que llegue; festivo y domingo, sin avisos", async () => {
   await resetSheet();
   clearSent();
   setCell("Esperado", (r) => r.fecha === "2026-10-28", "llego", "no");
+  setCell("Esperado", (r) => r.fecha === "2026-10-26", "llego", "sí");
+  addRow("Reportes", { fecha: "2026-10-28", hora: "16:30", reportado_por: "Hermano" });
   on("2026-10-28");
-  assertEquals((await runJob("diario")).enviado, ["recordatorio del reporte"]);
+  assertEquals((await runJob("diario")).enviado, ["recordatorio de pendientes atrasados (3)"]);
+  assertStringIncludes(toCarlos()[0], "• Hoy: Viga instalada y puntales retirados (tarea 03) · no llegó");
+  assert(!toCarlos()[0].includes("El albañil empieza la obra"));
 
   clearSent();
   on("2026-11-02");

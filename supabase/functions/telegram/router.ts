@@ -17,6 +17,7 @@ import * as expenses from "./agents/expenses.ts";
 import { interpret } from "./agents/interpret.ts";
 import * as mailInvoices from "./agents/mail_invoices.ts";
 import * as milestones from "./agents/milestones.ts";
+import * as overdue from "./agents/overdue.ts";
 import * as payments from "./agents/payments.ts";
 import * as questions from "./agents/questions.ts";
 import * as report from "./agents/report.ts";
@@ -61,6 +62,7 @@ export async function route(ctx: Context): Promise<void> {
     if (data.startsWith("pag:")) return await payments.onButton(ctx);
     if (data.startsWith("hit:")) return await milestones.onButton(ctx);
     if (data.startsWith("cor:")) return await mailInvoices.onButton(ctx);
+    if (data.startsWith("atr:")) return await overdue.onButton(ctx);
     if (data.startsWith("que:")) return await answerQuestion(ctx);
     await answerCallback(ctx.callback.id, "Ese botón ya no está activo.");
     return;

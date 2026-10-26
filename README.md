@@ -296,8 +296,11 @@ cron y muestra qué mandó. Escribe de verdad: manda los mensajes y marca `aviso
 - **Lunes:** `deno task programado lunes --fecha 2026-11-02`. Al tema Reportes y a tu privado: semana 2, «Hoy es
   festivo», los objetivos de cada persona y lo esperado de la semana.
 - **Diario:** `deno task programado diario --fecha 2026-10-28`.
-  - Lo esperado de ese día sin `llego` («Viga instalada…»): aviso a los dos (tema Reportes y tu privado) y
-    `aviso_enviado = sí`. Si lo corres otra vez, no repite el aviso.
+  - **Pendientes atrasados**, todos los días hasta que se marquen: lo esperado hasta hoy que no llegó o nadie confirmó
+    (`llego` distinto de «sí») y las tareas cuyo `fin` ya pasó sin terminar, con los días de obra de atraso. Van al tema
+    Reportes (sin botones) y a tu privado con un botón por cada uno: «✅ Llegó: …» o «✅ Terminada: …». Al tocarlo, el
+    bot pregunta y con «Sí» escribe `llego = sí` en `Esperado` o `estado = terminada` en `Tareas`. También sirve
+    marcarlo en el reporte o en la hoja. La primera vez marca `aviso_enviado` (solo como registro).
   - Si no hay fila de `Reportes` de ese día: recordatorio en el tema Reportes.
   - Con `--fecha 2026-11-02` (festivo) no manda nada.
 - **Sábado:** `deno task programado diario --fecha 2026-10-31`. Además de lo diario, el cierre de la semana:
@@ -309,8 +312,6 @@ cron y muestra qué mandó. Escribe de verdad: manda los mensajes y marca `aviso
 - **El camino del cron:** en el SQL Editor, `select interno.llamar_programado('diario');` y luego
   `select status_code, content from net._http_response order by created desc limit 1;`. Debe dar 200 con lo que mandó
   (con la fecha real de hoy).
-
-Al terminar, borra en `Esperado` los `aviso_enviado` que marcaron las pruebas.
 
 ### Facturas del correo (/correo)
 

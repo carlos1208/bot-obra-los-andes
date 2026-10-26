@@ -203,6 +203,15 @@ export function scheduleProgress(
   return { actual: (100 * done) / total, expected: (100 * due) / total };
 }
 
+/** Tareas atrasadas: su fin ya pasó y no están terminadas (sin las tentativas). Atraso en días de obra. */
+export function overdueTasks(tasks: Task[], today: string, cfg: Config): { task: Task; days: number }[] {
+  return tasks
+    .filter((t) => !t.tentativo && t.fin && t.fin < today && t.estado !== "terminada")
+    .map((t) => ({ task: t, days: workDaysBetween(addDays(t.fin, 1), today, cfg) }))
+    .filter((x) => x.days > 0)
+    .sort((a, b) => b.days - a.days || a.task.id.localeCompare(b.task.id));
+}
+
 /** Lo que sigue: tareas sin terminar (ni tentativas) cuyas dependencias ya están terminadas, por fecha de inicio. */
 export function nextTasks(tasks: Task[], finishedNow: string[] = [], limit = 3): Task[] {
   const done = new Set([...tasks.filter((t) => t.estado === "terminada").map((t) => t.id), ...finishedNow]);

@@ -1,7 +1,9 @@
 // Avisos programados (sección 6.7 del prompt). Cada uno lee la hoja (y Drive) en ese momento.
 // - lunes 07:00: objetivos y lo esperado de la semana, al tema Reportes y al privado de Carlos.
-// - lunes a sábado 17:00, sin festivos: lo esperado de hoy sin confirmar (a los dos, y marca aviso_enviado) y,
-//   si no hay reporte del día, el recordatorio para el hermano en el tema Reportes.
+// - lunes a sábado 17:00, sin festivos: los pendientes atrasados (tareas cuyo fin pasó sin terminar y lo esperado
+//   hasta hoy que no llegó o nadie confirmó) se recuerdan todos los días hasta que se marquen: al tema Reportes y
+//   al privado de Carlos, con un botón por cada uno para marcarlo. Y si no hay reporte del día, el recordatorio
+//   para el hermano en el tema Reportes.
 // - sábado 17:00, en el mismo aviso diario: el cierre de la semana.
 
 import { envNumber } from "../_shared/env.ts";
@@ -23,6 +25,7 @@ import {
   type Config,
   isHoliday,
   isWorkDay,
+  overdueTasks,
   pettyCashBalance,
   pettyCashToRefill,
   readConfig,
@@ -32,9 +35,9 @@ import {
   workDaysBetween,
   workWeek,
 } from "../_shared/site.ts";
-import { sendMessage, type Target } from "../_shared/telegram.ts";
+import { type Keyboard, sendMessage, type Target } from "../_shared/telegram.ts";
 import { reportError } from "../_shared/errors.ts";
-import { short } from "../telegram/ui.ts";
+import { button, short } from "../telegram/ui.ts";
 
 export type Job = "lunes" | "diario";
 
@@ -48,8 +51,8 @@ export interface JobResult {
 const reportsTopic = (): Target => ({ chatId: envNumber("GROUP_CHAT_ID"), threadId: envNumber("TOPIC_REPORTES_ID") });
 const carlos = (): Target => ({ chatId: envNumber("CARLOS_TG_ID") });
 
-/** Telegram corta en 4096 caracteres: los mensajes largos van en partes, por líneas. */
-async function send(target: Target, text: string): Promise<void> {
+/** Telegram corta en 4096 caracteres: los mensajes largos van en partes, por líneas (los botones, en la última). */
+async function send(target: Target, text: string, keyboard?: Keyboard): Promise<void> {
   let part: string[] = [];
   for (const line of text.split("\n")) {
     if (part.length && [...part, line].join("\n").length > 3500) {
@@ -58,7 +61,7 @@ async function send(target: Target, text: string): Promise<void> {
     }
     part.push(line);
   }
-  await sendMessage(target, part.join("\n"));
+  await sendMessage(target, part.join("\n"), keyboard);
 }
 
 /** Al tema Reportes (los dos lo ven) y al privado de Carlos. */
@@ -140,20 +143,8 @@ async function daily(today: string): Promise<string[]> {
   else if (!isWorkDay(today, cfg)) {
     sent.push(`sin avisos: hoy ${isHoliday(today, cfg) ? "es festivo" : "no se trabaja"}`);
   } else {
-    // Lo esperado de hoy que nadie confirmó (con «no llegó», Carlos ya recibió el aviso en el reporte).
-    const pending = expectedOf(sheet.Esperado, today, today)
-      .filter((r) => !normalize(r.llego) && !isYes(r.aviso_enviado));
-    if (pending.length) {
-      await toBoth(
-        [
-          "⚠️ <b>Lo esperado de hoy no está confirmado</b>",
-          ...pending.map((r) => expectedLine(r, false)),
-          "Confírmalo en el reporte del día, en «¿Llegó lo esperado hoy?».",
-        ].join("\n"),
-      );
-      await updateCells("Esperado", pending.map((r) => ({ row: r._row, values: { aviso_enviado: "sí" } })));
-      sent.push(`aviso de lo esperado sin confirmar (${pending.length})`);
-    }
+    const reminded = await overdueReminder(today, cfg, sheet);
+    if (reminded) sent.push(`recordatorio de pendientes atrasados (${reminded})`);
     if (!sheet.Reportes.some((r) => cellDate(r.fecha) === today)) {
       await send(
         reportsTopic(),
@@ -168,8 +159,71 @@ async function daily(today: string): Promise<string[]> {
     await toBoth(await weeklyClose(today, cfg, sheet));
     sent.push("cierre de la semana");
   }
-  if (!sent.length) sent.push("nada: lo esperado está confirmado y ya hay reporte");
+  if (!sent.length) sent.push("nada: no hay pendientes atrasados y ya hay reporte");
   return sent;
+}
+
+/** Cuántos botones lleva el recordatorio (los demás se marcan en el reporte o en la hoja). */
+const MAX_BUTTONS = 12;
+
+/**
+ * Pendientes atrasados, todos los días hasta que se marquen: lo esperado hasta hoy que no llegó o nadie confirmó
+ * (llego distinto de «sí») y las tareas cuyo fin ya pasó sin terminar. Al tema Reportes y, con un botón por cada
+ * uno, al privado de Carlos. Marca aviso_enviado en lo esperado la primera vez. Devuelve cuántos son.
+ */
+async function overdueReminder(today: string, cfg: Config, sheet: Record<string, Row[]>): Promise<number> {
+  const expected = expectedOf(sheet.Esperado, "0000-01-01", today).filter((r) => normalize(r.llego) !== "si");
+  const tasks = overdueTasks(readTasks(sheet.Tareas), today, cfg);
+  if (!expected.length && !tasks.length) return 0;
+
+  const lines = ["⏰ <b>Pendientes atrasados</b> (se recuerdan cada día hasta que se marquen)"];
+  if (expected.length) {
+    lines.push("", "<b>Lo esperado sin confirmar</b>");
+    for (const r of expected) {
+      const date = cellDate(r.fecha)!;
+      const days = workDaysBetween(addDays(date, 1), today, cfg);
+      const when = date === today ? "Hoy" : `${shortDate(date)} (hace ${days} día${days === 1 ? "" : "s"} de obra)`;
+      const task = text(r.tarea_id) ? ` (tarea ${escapeHtml(text(r.tarea_id))})` : "";
+      const status = normalize(r.llego) === "no" ? " · no llegó" : "";
+      lines.push(`• ${when}: ${escapeHtml(text(r.quien_o_que))}${task}${status}`);
+    }
+  }
+  if (tasks.length) {
+    lines.push("", "<b>Tareas atrasadas</b>");
+    for (const { task: t, days } of tasks) {
+      lines.push(
+        `• ${escapeHtml(t.id)} ${escapeHtml(short(t.tarea, 60))}: ${days} día${days > 1 ? "s" : ""} de atraso (fin ${
+          shortDate(t.fin)
+        })`,
+      );
+    }
+  }
+
+  const keyboard: Keyboard = [
+    ...expected.map((r) => [button(short(`✅ Llegó: ${text(r.quien_o_que)}`, 40), `atr:e:${r._row}`)]),
+    ...tasks.map(({ task: t }) => [button(short(`✅ Terminada: ${t.id} ${t.tarea}`, 40), `atr:t:${t.id}`)]),
+  ];
+  const extra = keyboard.length - MAX_BUTTONS;
+  await send(
+    reportsTopic(),
+    [...lines, "", "Se marcan en el reporte del día: las tareas por número y lo esperado en «¿Llegó lo esperado hoy?»."]
+      .join("\n"),
+  );
+  await send(
+    carlos(),
+    [
+      ...lines,
+      "",
+      "Toca lo que ya se hizo para marcarlo.",
+      ...(extra > 0 ? [`Hay ${extra} más sin botón: márcalos en el reporte o en la hoja.`] : []),
+    ].join("\n"),
+    keyboard.slice(0, MAX_BUTTONS),
+  );
+  const first = expected.filter((r) => !isYes(r.aviso_enviado));
+  if (first.length) {
+    await updateCells("Esperado", first.map((r) => ({ row: r._row, values: { aviso_enviado: "sí" } })));
+  }
+  return expected.length + tasks.length;
 }
 
 // --- Sábado: cierre de la semana -------------------------------------------------
@@ -198,11 +252,7 @@ async function weeklyClose(today: string, cfg: Config, sheet: Record<string, Row
   }
 
   // Tareas atrasadas: su fin ya pasó y no están terminadas. Atraso en días de obra (lun–sáb sin festivos).
-  const late = readTasks(sheet.Tareas)
-    .filter((t) => !t.tentativo && t.fin && t.fin < today && t.estado !== "terminada")
-    .map((t) => ({ t, days: workDaysBetween(addDays(t.fin, 1), today, cfg) }))
-    .filter((x) => x.days > 0)
-    .sort((a, b) => b.days - a.days || a.t.id.localeCompare(b.t.id));
+  const late = overdueTasks(readTasks(sheet.Tareas), today, cfg).map(({ task, days }) => ({ t: task, days }));
   lines.push("", "<b>Tareas atrasadas</b>");
   if (!late.length) lines.push("Ninguna.");
   for (const { t, days } of late) {
