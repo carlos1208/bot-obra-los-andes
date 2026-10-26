@@ -81,6 +81,17 @@ export async function tg<T = unknown>(method: string, params: Record<string, unk
   return data.result as T;
 }
 
+/** Llamada con multipart/form-data (para subir archivos). */
+async function tgForm<T = unknown>(method: string, form: FormData): Promise<T> {
+  const r = await fetch(`https://api.telegram.org/bot${env("TELEGRAM_BOT_TOKEN")}/${method}`, {
+    method: "POST",
+    body: form,
+  });
+  const data = await r.json();
+  if (!data.ok) throw new Error(`Telegram ${method}: ${data.description ?? r.status}`);
+  return data.result as T;
+}
+
 export interface Target {
   chatId: number;
   threadId?: number;
@@ -119,6 +130,27 @@ export async function editKeyboard(chatId: number, messageId: number, keyboard?:
 /** Responde al toque de un botón. Si ya venció (p. ej. en un reintento), no pasa nada. */
 export async function answerCallback(id: string, text?: string): Promise<void> {
   await tg("answerCallbackQuery", { callback_query_id: id, text }).catch(() => {});
+}
+
+/**
+ * Manda fotos subiendo sus bytes: una con sendPhoto; varias como álbum (sendMediaGroup, de 2 a 10 por álbum).
+ */
+export async function sendPhotos(target: Target, photos: { bytes: Uint8Array<ArrayBuffer>; mime: string }[]) {
+  for (let i = 0; i < photos.length; i += 10) {
+    const chunk = photos.slice(i, i + 10);
+    const form = new FormData();
+    form.set("chat_id", String(target.chatId));
+    if (target.threadId) form.set("message_thread_id", String(target.threadId));
+    const file = (p: { bytes: Uint8Array<ArrayBuffer>; mime: string }) => new Blob([p.bytes], { type: p.mime });
+    if (chunk.length === 1) {
+      form.set("photo", file(chunk[0]), "foto.jpg");
+      await tgForm("sendPhoto", form);
+      continue;
+    }
+    form.set("media", JSON.stringify(chunk.map((_, j) => ({ type: "photo", media: `attach://p${j}` }))));
+    chunk.forEach((p, j) => form.set(`p${j}`, file(p), `p${j}.jpg`));
+    await tgForm("sendMediaGroup", form);
+  }
 }
 
 /** Descarga un archivo de Telegram (máximo 20 MB). */

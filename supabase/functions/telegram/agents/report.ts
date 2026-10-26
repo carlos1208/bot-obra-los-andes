@@ -20,6 +20,7 @@ import {
   shortDate,
   todayISO,
 } from "../../_shared/format.ts";
+import { listPairs, STATE } from "../../_shared/pairs.ts";
 import { appendRow, readTabs, updateCells } from "../../_shared/sheets.ts";
 import {
   nextTasks,
@@ -411,6 +412,19 @@ async function sheetFacts(data: Data) {
     savedToday.includes(t.id) && !finished.includes(t.id) ? { ...t, estado: "pendiente" } : t
   );
   const next = nextTasks(current, finished);
+  // Pares con DESPUÉS subido hoy y tareas terminadas cuyo ANTES todavía no tiene DESPUÉS.
+  const pairs = await listPairs();
+  const pairDetails = (p: (typeof pairs)[number]) =>
+    [p.tasks.length ? `tarea${p.tasks.length > 1 ? "s" : ""} ${p.tasks.join(", ")}` : "", p.hitos.join(", ")]
+      .filter(Boolean).join("; ");
+  const photos = pairs
+    .filter((p) => p.after.some((f) => f.createdTime && todayISO(new Date(f.createdTime)) === data.date))
+    .map((p) => `${p.code} ${p.name}: antes y después${pairDetails(p) ? ` (${pairDetails(p)})` : ""}, ${p.state}`);
+  const missingAfter = finished.flatMap((id) =>
+    pairs
+      .filter((p) => p.state === STATE.noAfter && p.tasks.includes(id))
+      .map((p) => `⚠️ ${id} está terminada y ${p.code} ${p.name} no tiene foto DESPUÉS.`)
+  );
   // Fases: las de lo que se terminó hoy y, si no hay, las de lo que sigue.
   const phases = [...new Set(tasks.filter((t) => finished.includes(t.id)).map((t) => t.fase))];
   if (!phases.length) phases.push(...new Set(next.map((t) => t.fase)));
@@ -422,6 +436,8 @@ async function sheetFacts(data: Data) {
       progress: scheduleProgress(current.filter((t) => t.fase === phase), data.date, cfg, finished),
     })),
     next,
+    photos,
+    missingAfter,
     purchases: Gastos
       .filter((r) => cellDate(r.fecha) === data.date)
       .map((r) => `${short(String(r.items ?? ""), 40)} en ${r.proveedor || "—"}, ${formatPesos(cellNumber(r.valor))}`),
@@ -461,7 +477,10 @@ function reportSections(ctx: Context, data: Data, f: Facts): { title: string; li
       ],
     },
     { title: "¿Llegó lo esperado hoy?", lines: expectedLines(data) },
-    { title: "Fotos", lines: ["—"] },
+    {
+      title: "Fotos",
+      lines: [...(f.photos.length ? f.photos.map((p) => `• ${p}`) : ["Sin pares nuevos hoy."]), ...f.missingAfter],
+    },
   ];
 }
 
@@ -635,7 +654,7 @@ async function saveReport(ctx: Context, session: Session<Data>, messageId: numbe
       llego_esperado: data.expected.filter((e) => e.arrived === true).map((e) => e.label).join("; "),
       no_llego: data.expected.filter((e) => e.arrived === false).map((e) => e.label).join("; "),
       para_continuar: f.next.map((t) => t.id).join("-"),
-      pares_antes_despues: "",
+      pares_antes_despues: f.photos.join("; "),
       compras_del_dia: f.purchases.join("; "),
       saldo_caja_menor: f.balance,
       texto_reporte: text,

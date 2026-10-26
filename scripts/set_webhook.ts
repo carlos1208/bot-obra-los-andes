@@ -21,7 +21,9 @@ await tg("setMyCommands", {
     { command: "reporte", description: "Reporte del día" },
     { command: "gasto", description: "Registrar una compra" },
     { command: "estado", description: "Semana de obra, tareas de hoy y disponible" },
-    { command: "antes", description: "Subir fotos ANTES (Carlos)" },
+    { command: "antes", description: "Subir fotos ANTES" },
+    { command: "despues", description: "Subir fotos DESPUÉS" },
+    { command: "pendientes", description: "Pares por validar (Carlos)" },
   ],
 });
 const info = await tg<{ url: string; pending_update_count: number; last_error_message?: string }>("getWebhookInfo");

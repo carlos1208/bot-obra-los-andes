@@ -19,8 +19,8 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 | ---------------------- | --------------------------------------------------------------------------------------------------------------- | ------------- |
 | 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista         |
 | 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista         |
-| 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | **En prueba** |
-| 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre»                                         | Pendiente     |
+| 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | Lista         |
+| 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre», pares en el reporte                    | **En prueba** |
 | 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Pendiente     |
 | 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Pendiente     |
 
@@ -201,6 +201,27 @@ Antes: `git pull`, `deno task test`, `deno task crear-hoja --reemplazar Reportes
 - **Opcional:** un PDF de factura por tu privado y una compra sin factura (máximo $10.000 y una por día).
 
 La sección «Fotos» del reporte sale con «—» hasta la fase 4.
+
+### Prueba de la fase 4
+
+Antes: `git pull`, `deno task test`, `npx supabase functions deploy telegram --use-api` y `deno task webhook` (registra
+`/despues` y `/pendientes`).
+
+- **F01 con su ANTES y su DESPUÉS.** El ANTES de F01 ya está en Drive desde la fase 1.
+  1. En el tema «Antes y después», `/despues` → F01 (📅 = de tareas de esta semana). El bot manda el ANTES de
+     referencia; manda la foto DESPUÉS desde el mismo ángulo.
+  2. Te llega por privado el par como álbum, con las tareas, el hito y su criterio, y los botones «Cierre validado», «No
+     cuadra, reviso en sitio» y «Pedir otra foto». Prueba «Pedir otra foto» (el pedido sale en el tema con el botón
+     «Subir DESPUÉS»), sube otra y luego «No cuadra…».
+  3. `/pendientes` por privado: F01 sale en «Revisar en sitio». «Ver F01» → «Cierre validado».
+  4. En Drive, `Antes y después/F01 …/` tiene `ANTES … (1).jpg` y `DESPUÉS … (1).jpg`; el estado está en las
+     appProperties (no en la hoja).
+- **ANTES por imprevisto del hermano:** foto en el tema → «ANTES por imprevisto» → nombre corto → motivo → «Listo». Te
+  llega por privado con «Aprobar» y «Rechazar». Al aprobar, Gemini propone las tareas: «Sí» o «Cambiar» y escribes los
+  números (`23-27`). Necesita a tu hermano (o, mientras tanto, otra cuenta de Telegram en `HERMANO_TG_ID`).
+- **«Otro nombre» (Carlos):** `/antes` → «Otro nombre» → nombre corto → confirma las tareas → foto. Queda como F25, F26…
+- **Reporte:** el día que se sube un DESPUÉS, la sección «Fotos» lo nombra («F01 Muro cocina–sala completo: antes y
+  después (tareas 02, 09; H1, H2), por validar»). Si marcas terminada una tarea cuyo ANTES no tiene DESPUÉS, avisa.
 
 ## Uso diario
 

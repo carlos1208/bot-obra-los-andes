@@ -51,6 +51,8 @@ export interface FakeFile {
   mimeType: string;
   parents: string[];
   appProperties?: Record<string, string>;
+  createdTime?: string;
+  trashed?: boolean;
 }
 export const drive: FakeFile[] = [];
 export const sent: { method: string; params: Record<string, unknown> }[] = [];
@@ -178,20 +180,42 @@ export function rowsOf(tab: string): Record<string, unknown>[] {
 }
 
 // --- Drive -----------------------------------------------------------------------
+/** Hora de creación de los archivos: sigue al reloj simulado de las pruebas. */
+let now = () => new Date();
 function driveQuery(q: string): FakeFile[] {
   const name = q.match(/name = '([^']*)'/)?.[1];
   const parent = q.match(/'([^']+)' in parents/)?.[1];
   const mime = q.match(/mimeType = '([^']+)'/)?.[1];
   const prop = q.match(/appProperties has \{ key='(\w+)' and value='([^']*)' \}/);
+  // Lo que está en la papelera (o dentro de una carpeta en la papelera) no aparece.
+  const trashed = (f: FakeFile): boolean =>
+    Boolean(f.trashed) || f.parents.some((id) => {
+      const parentFile = drive.find((x) => x.id === id);
+      return parentFile ? trashed(parentFile) : false;
+    });
   return drive.filter((f) =>
-    (!name || f.name === name) && (!parent || f.parents.includes(parent)) && (!mime || f.mimeType === mime) &&
-    (!prop || f.appProperties?.[prop[1]] === prop[2])
+    !trashed(f) && (!name || f.name === name) && (!parent || f.parents.includes(parent)) &&
+    (!mime || f.mimeType === mime) && (!prop || f.appProperties?.[prop[1]] === prop[2])
   );
 }
 
 async function driveApi(url: URL, init: RequestInit): Promise<Response> {
-  if (url.pathname === "/drive/v3/files" && (init.method ?? "GET") === "GET") {
+  const method = init.method ?? "GET";
+  if (url.pathname === "/drive/v3/files" && method === "GET") {
     return Response.json({ files: driveQuery(url.searchParams.get("q")!) });
+  }
+  const id = url.pathname.match(/^\/drive\/v3\/files\/([^/]+)$/)?.[1];
+  if (id && method === "GET") return new Response(new Uint8Array([4, 5, 6])); // alt=media
+  if (id && method === "PATCH") {
+    const file = drive.find((f) => f.id === id)!;
+    const body = JSON.parse(String(init.body));
+    if (body.trashed) file.trashed = true;
+    for (const [k, v] of Object.entries(body.appProperties ?? {})) {
+      file.appProperties ??= {};
+      if (v === null) delete file.appProperties[k];
+      else file.appProperties[k] = String(v);
+    }
+    return Response.json(file);
   }
   let meta: Omit<FakeFile, "id">;
   if (url.pathname.startsWith("/upload/")) {
@@ -201,7 +225,12 @@ async function driveApi(url: URL, init: RequestInit): Promise<Response> {
   } else {
     meta = JSON.parse(String(init.body));
   }
-  const file = { id: `d${drive.length + 1}`, ...meta, webViewLink: `https://drive/${drive.length + 1}` };
+  const file = {
+    id: `d${drive.length + 1}`,
+    ...meta,
+    createdTime: now().toISOString(),
+    webViewLink: `https://drive/${drive.length + 1}`,
+  };
   drive.push(file as FakeFile);
   return Response.json(file);
 }
@@ -216,7 +245,13 @@ const hasKeyboard = (p: Record<string, unknown>) =>
 function telegram(url: URL, init: RequestInit): Response {
   if (url.pathname.startsWith("/file/")) return new Response(new Uint8Array([1, 2, 3]));
   const method = url.pathname.split("/").pop()!;
-  const params = JSON.parse(String(init.body ?? "{}"));
+  // Las fotos van en multipart: se guardan los campos de texto y cuántos archivos llevaba.
+  const params = init.body instanceof FormData
+    ? {
+      ...Object.fromEntries([...init.body].filter(([, v]) => typeof v === "string")),
+      files: [...init.body].filter(([, v]) => typeof v !== "string").length,
+    }
+    : JSON.parse(String(init.body ?? "{}"));
   sent.push({ method, params });
   if (method === "getFile") return Response.json({ ok: true, result: { file_path: `files/${params.file_id}` } });
   if (method === "sendMessage") {
@@ -264,6 +299,7 @@ globalThis.fetch = async (input: string | URL | Request, init: RequestInit = {})
 
 export const { processUpdate, timing } = await import("../supabase/functions/telegram/process.ts");
 export const { clock } = await import("../supabase/functions/_shared/format.ts");
+now = () => clock.now();
 
 // --- Ayudas ----------------------------------------------------------------------
 const nameOf = (id: number) => id === CARLOS ? "Carlos" : id === BROTHER ? "Hermano" : "x";

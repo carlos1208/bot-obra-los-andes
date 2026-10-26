@@ -165,3 +165,31 @@ export function summarizeDay(notes: { hora: string; texto: string }[], model?: s
     model,
   });
 }
+
+const PROPOSE_TASKS_INSTRUCTIONS =
+  `Propones las tareas del cronograma de una obra que se verán en una foto ANTES con este nombre (y el motivo, si lo hay).
+- tasks: solo las tareas que claramente correspondan a lo que muestra la foto; máximo 5. Si ninguna corresponde, lista vacía.`;
+
+/** Tareas del cronograma para una foto ANTES con nombre libre («Otro nombre» o imprevisto). */
+export async function proposeTasks(
+  name: string,
+  reason: string | null,
+  tasks: { id: string; label: string }[],
+  model?: string,
+): Promise<string[]> {
+  const got = await generateJson<{ tasks: string[] }>({
+    instructions: PROPOSE_TASKS_INSTRUCTIONS,
+    parts: [
+      ["Tareas del cronograma:", ...tasks.map((t) => `- ${t.id}: ${t.label}`)].join("\n"),
+      `Foto: ${name}${reason ? `\nMotivo: ${reason}` : ""}`,
+    ],
+    schema: {
+      type: "object",
+      properties: { tasks: { type: "array", items: oneOf(tasks.map((t) => t.id), "Número de la tarea"), maxItems: 5 } },
+      required: ["tasks"],
+    },
+    model,
+  });
+  const valid = new Set(tasks.map((t) => t.id));
+  return [...new Set(got.tasks.filter((id) => valid.has(id)))];
+}

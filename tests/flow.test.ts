@@ -127,10 +127,11 @@ Deno.test("fotos ANTES: álbum que llega antes de elegir el código", async () =
   assertStringIncludes(lastText(), "quedó con 3 fotos ANTES");
 });
 
-Deno.test("el hermano no sube ANTES y un error no le muestra detalles técnicos", async () => {
+Deno.test("el /antes del hermano es por imprevisto y un error no le muestra detalles técnicos", async () => {
   clearSent();
   await processUpdate(message(BROTHER, { text: "/antes" }, GROUP, PHOTOS_TOPIC));
-  assertStringIncludes(lastText(), "Las fotos ANTES las sube Carlos.");
+  assertStringIncludes(lastText(), "ANTES por imprevisto o que falta. Escribe un nombre corto");
+  await processUpdate(tap(BROTHER, "ant:x", GROUP, PHOTOS_TOPIC));
 
   clearSent();
   const errorsBefore = (tables.errores ?? []).length;

@@ -141,3 +141,19 @@ export function appProperties(p: Record<string, string>): Record<string, string>
     Object.entries(p).filter(([, v]) => v !== "").map(([k, v]) => [k, fitPropertyValue(k, v)]),
   );
 }
+
+/** Contenido de un archivo (solo los que creó el bot: permiso drive.file). */
+export async function downloadDriveFile(id: string): Promise<Uint8Array<ArrayBuffer>> {
+  const r = await fetch(`${API}/files/${id}?alt=media`, { headers: { Authorization: `Bearer ${await driveToken()}` } });
+  if (!r.ok) throw new Error(`Drive ${r.status} al descargar ${id}`);
+  return new Uint8Array(await r.arrayBuffer());
+}
+
+/** Manda un archivo o carpeta a la papelera de Drive (se puede recuperar 30 días). */
+export async function trashFile(id: string): Promise<void> {
+  await driveFetch(`${API}/files/${id}?fields=id`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trashed: true }),
+  });
+}

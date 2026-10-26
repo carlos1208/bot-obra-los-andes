@@ -2,7 +2,15 @@
 // Si el contenido es ambiguo, pregunta con botones; no adivina.
 
 import { deleteSession, readSession, saveSession, type Session } from "../_shared/db.ts";
-import { answerCallback, commandOf, editMessageText, imageOf, invoiceFileOf } from "../_shared/telegram.ts";
+import {
+  answerCallback,
+  type Button,
+  commandOf,
+  editMessageText,
+  imageOf,
+  invoiceFileOf,
+} from "../_shared/telegram.ts";
+import * as afterPhotos from "./agents/after_photos.ts";
 import * as beforePhotos from "./agents/before_photos.ts";
 import * as expenses from "./agents/expenses.ts";
 import * as report from "./agents/report.ts";
@@ -15,10 +23,13 @@ const HELP = [
   "/reporte – reporte del día (tema Reportes)",
   "/gasto – registrar una compra (tema Gastos)",
   "/estado – semana de obra, tareas de hoy y disponible",
-  "/antes – subir fotos ANTES (Carlos)",
+  "/antes – subir fotos ANTES (tu hermano: ANTES por imprevisto)",
+  "/despues – subir fotos DESPUÉS",
+  "/pendientes – pares por validar y por revisar en sitio (Carlos)",
 ].join("\n");
 
-/** Foto en el privado de Carlos: puede ser una factura o una foto ANTES. */
+/** Foto que puede ser varias cosas: en el privado de Carlos, factura o ANTES; del hermano en el tema de fotos,
+ * DESPUÉS o ANTES por imprevisto. */
 const QUESTION = "pregunta";
 interface QuestionData extends FlowBase {
   images: NonNullable<ReturnType<typeof imageOf>>[];
@@ -31,6 +42,8 @@ export async function route(ctx: Context): Promise<void> {
     if (data.startsWith("ant:")) return await beforePhotos.onButton(ctx);
     if (data.startsWith("gas:")) return await expenses.onButton(ctx);
     if (data.startsWith("rep:")) return await report.onButton(ctx);
+    if (data.startsWith("dsp:")) return await afterPhotos.onButton(ctx);
+    if (data.startsWith("val:")) return await afterPhotos.onValidation(ctx);
     if (data.startsWith("que:")) return await answerQuestion(ctx);
     await answerCallback(ctx.callback.id, "Ese botón ya no está activo.");
     return;
@@ -44,6 +57,8 @@ export async function route(ctx: Context): Promise<void> {
   if (command === "antes") return await beforePhotos.start(ctx);
   if (command === "reporte") return await report.start(ctx);
   if (command === "gasto") return await expenses.start(ctx);
+  if (command === "despues") return await afterPhotos.start(ctx);
+  if (command === "pendientes") return await afterPhotos.pending(ctx);
   if (command) {
     // /start, /ayuda y los comandos que todavía no existen.
     if (ctx.place === "private") await ctx.reply(HELP);
@@ -56,6 +71,7 @@ export async function route(ctx: Context): Promise<void> {
     if (session.flujo === beforePhotos.FLOW) return await beforePhotos.resume(ctx, session as never);
     if (session.flujo === expenses.FLOW) return await expenses.resume(ctx, session as never);
     if (session.flujo === report.FLOW) return await report.resume(ctx, session as never);
+    if (session.flujo === afterPhotos.FLOW) return await afterPhotos.resume(ctx, session as never);
     if (session.flujo === QUESTION) {
       await ctx.reply("Elige arriba qué es la foto.");
       return;
@@ -80,8 +96,11 @@ export async function route(ctx: Context): Promise<void> {
   if (ctx.place === "photos") {
     if (!images.length) return;
     if (ctx.role === "carlos") return await beforePhotos.start(ctx, images);
-    await ctx.reply("Las fotos DESPUÉS todavía no las recibo. Te aviso cuando estén listas.");
-    return;
+    return await askAboutPhoto(ctx, images, [
+      button("DESPUÉS", "que:d"),
+      button("ANTES por imprevisto", "que:i"),
+      button("Cancelar", "que:x"),
+    ]);
   }
   if (ctx.place === "reports") {
     if (images.length || invoice) {
@@ -93,20 +112,33 @@ export async function route(ctx: Context): Promise<void> {
   }
   if (ctx.place === "private") {
     if (invoice && !images.length) return await expenses.receiveInvoice(ctx, invoice); // PDF
-    if (images.length) return await askAboutPhoto(ctx, images);
+    if (images.length) {
+      return await askAboutPhoto(ctx, images, [
+        button("Factura", "que:f"),
+        button("Foto ANTES", "que:a"),
+        button("Cancelar", "que:x"),
+      ]);
+    }
     await ctx.reply(HELP);
   }
   // En el resto del grupo, la conversación normal no es para el bot.
 }
 
-async function askAboutPhoto(ctx: Context, images: QuestionData["images"]): Promise<void> {
-  const m = await ctx.reply("¿Qué es esta foto?", [[
-    button("Factura", "que:f"),
-    button("Foto ANTES", "que:a"),
-    button("Cancelar", "que:x"),
-  ]]);
-  await saveSession(ctx.chatId, ctx.userId, QUESTION, "elegir", { images, msg: m.message_id, hilo: null });
+async function askAboutPhoto(ctx: Context, images: QuestionData["images"], options: Button[]): Promise<void> {
+  const m = await ctx.reply("¿Qué es esta foto?", [options]);
+  await saveSession(ctx.chatId, ctx.userId, QUESTION, "elegir", {
+    images,
+    msg: m.message_id,
+    hilo: ctx.threadId ?? null,
+  });
 }
+
+const CHOICES: Record<string, string> = {
+  f: "Factura",
+  a: "Foto ANTES",
+  d: "DESPUÉS",
+  i: "ANTES por imprevisto",
+};
 
 async function answerQuestion(ctx: Context): Promise<void> {
   const cb = ctx.callback!;
@@ -118,12 +150,13 @@ async function answerQuestion(ctx: Context): Promise<void> {
   await answerCallback(cb.id);
   const { images } = session.datos;
   const choice = (cb.data ?? "").split(":")[1];
-  const label = choice === "f" ? "Factura" : choice === "a" ? "Foto ANTES" : "Cancelado.";
-  await editMessageText(ctx.chatId, cb.message!.message_id, label);
+  await editMessageText(ctx.chatId, cb.message!.message_id, CHOICES[choice] ?? "Cancelado.");
   await deleteSession(ctx.chatId, ctx.userId);
   if (choice === "f") {
     if (images.length > 1) await ctx.reply("Uso la primera foto.");
     return await expenses.receiveInvoice(ctx, images[0]);
   }
   if (choice === "a") return await beforePhotos.start(ctx, images);
+  if (choice === "d") return await afterPhotos.start(ctx, images);
+  if (choice === "i") return await beforePhotos.startException(ctx, images);
 }
