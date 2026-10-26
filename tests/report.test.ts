@@ -100,13 +100,13 @@ Deno.test("reporte completo: nota de voz, resumen, tareas «2- 3», lo esperado,
   const preview = lastText();
   for (
     const line of [
-      "REPORTE – mié 28 oct\nResumen del día:\n• Se demolió el muro.\n• Se instaló la viga.",
-      "Hermano manifestó que terminó las tareas 02 Demoler parte alta del muro cocina-sala; 03 Pintar viga",
-      "Avance de la obra: 3 % (a hoy debería ir en 7 %; desvío −4 %)",
-      "Avance de Cocina: 10 % (a hoy debería ir en 10 %; desvío 0 %)",
-      "Se espera que ahora continúen con: 00 Triple A",
-      "Compras: ninguna · Caja menor: $100.000",
-      "¿Llegó lo esperado hoy?: no: Viga instalada y puntales retirados",
+      "<b>REPORTE – mié 28 oct</b>\n\n<b>Resumen del día</b>\n• Se demolió el muro.\n• Se instaló la viga.",
+      "<b>Tareas terminadas según Hermano</b>\n• 02 Demoler parte alta del muro cocina-sala\n• 03 Pintar viga",
+      "<b>Avance contra el cronograma</b>\n• Obra: 3 % (debería ir en 7 %; desvío −4 %)",
+      "• Cocina: 10 % (debería ir en 10 %; desvío 0 %)",
+      "<b>Se espera que continúen con</b>\n• 00 Triple A",
+      "<b>Compras</b>\nNinguna.\nCaja menor: $100.000",
+      "<b>¿Llegó lo esperado hoy?</b>\n❌ No llegó: Viga instalada y puntales retirados",
       "¿Lo guardo?",
     ]
   ) assertStringIncludes(preview, line);
@@ -204,7 +204,7 @@ Deno.test("actualizar el reporte del día: lista con las ya marcadas, desmarcar 
   await processUpdate(press(BROTHER, "rep:t:ok")); // lo esperado ya estaba marcado: va directo a la vista previa
   assertStringIncludes(
     lastText(),
-    "Hermano manifestó que terminó la tarea 02 Demoler parte alta del muro cocina-sala.",
+    "<b>Tareas terminadas según Hermano</b>\n• 02 Demoler parte alta del muro cocina-sala\n\n",
   );
   assertStringIncludes(lastText(), "Ya hay un reporte de hoy. ¿Lo actualizo con este?");
   await processUpdate(press(BROTHER, "rep:ok"));
@@ -223,8 +223,8 @@ Deno.test("«Ninguna» y «Agregar compra» desde la vista previa (la factura pu
   await processUpdate(press(BROTHER, "rep:t:no"));
   await processUpdate(press(BROTHER, "rep:e:0:1"));
   await processUpdate(press(BROTHER, "rep:e:fin"));
-  assertStringIncludes(lastText(), "Tareas terminadas: ninguna hoy.");
-  assertStringIncludes(lastText(), "Avance de la obra: 0 % (a hoy debería ir en 7 %; desvío −7 %)");
+  assertStringIncludes(lastText(), "<b>Tareas terminadas</b>\nNinguna hoy.");
+  assertStringIncludes(lastText(), "• Obra: 0 % (debería ir en 7 %; desvío −7 %)");
 
   await processUpdate(press(BROTHER, "rep:compra"));
   assertStringIncludes(lastText(), "Manda la foto o el PDF de la factura");
@@ -241,7 +241,7 @@ Deno.test("«Ninguna» y «Agregar compra» desde la vista previa (la factura pu
   await processUpdate(tap(BROTHER, "gas:p:caja", GROUP, EXPENSES_TOPIC));
   await processUpdate(tap(BROTHER, "gas:ok", GROUP, EXPENSES_TOPIC));
   // La vista previa vuelve al tema Reportes con la compra.
-  assertStringIncludes(lastTo(GROUP, REPORTS_TOPIC), "Compras: Brocha en Homecenter, $12.000 · Caja menor: $88.000");
+  assertStringIncludes(lastTo(GROUP, REPORTS_TOPIC), "• Brocha en Homecenter, $12.000\nCaja menor: $88.000");
   await processUpdate(press(BROTHER, "rep:x"));
 });
 

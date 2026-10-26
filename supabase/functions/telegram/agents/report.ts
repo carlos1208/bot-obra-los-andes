@@ -386,11 +386,11 @@ async function notifyMissing(ctx: Context, data: Data, label: string): Promise<v
 
 const signed = (n: number) => n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0";
 
-/** «Avance de la obra: 12 % (a hoy debería ir en 15 %; desvío −3 %)». */
+/** «• Obra: 12 % (debería ir en 15 %; desvío −3 %)». */
 function progressLine(label: string, p: { actual: number; expected: number }): string {
   const actual = Math.round(p.actual);
   const expected = Math.round(p.expected);
-  return `${label}: ${actual} % (a hoy debería ir en ${expected} %; desvío ${signed(actual - expected)} %)`;
+  return `• ${label}: ${actual} % (debería ir en ${expected} %; desvío ${signed(actual - expected)} %)`;
 }
 
 /** Lo que se lee de la hoja en este momento para el reporte. */
@@ -432,36 +432,46 @@ async function sheetFacts(data: Data) {
 
 type Facts = Awaited<ReturnType<typeof sheetFacts>>;
 
-function expectedText(data: Data): string {
-  if (!data.expected.length) return "nada esperado hoy";
-  const missing = data.expected.filter((e) => e.arrived === false).map((e) => e.label);
-  return missing.length ? `no: ${missing.join("; ")}` : "sí";
+function expectedLines(data: Data): string[] {
+  if (!data.expected.length) return ["Nada esperado hoy."];
+  return data.expected.map((e) => `${e.arrived === false ? "❌ No llegó" : "✅ Llegó"}: ${e.label}`);
 }
 
 const userName = (ctx: Context) => (ctx.callback?.from ?? ctx.message?.from)?.first_name || roleLabel(ctx);
 
-function finishedText(ctx: Context, data: Data, f: Facts): string {
+/** Secciones del reporte: título y líneas (una tarea o compra por línea). */
+function reportSections(ctx: Context, data: Data, f: Facts): { title: string; lines: string[] }[] {
   const finished = data.finished ?? [];
-  if (!finished.length) return "Tareas terminadas: ninguna hoy.";
-  const names = finished.map((id) => `${id} ${f.tasks.find((t) => t.id === id)?.tarea ?? ""}`.trim());
-  const which = names.length === 1 ? `la tarea ${names[0]}` : `las tareas ${names.join("; ")}`;
-  return `${userName(ctx)} manifestó que terminó ${which}.`;
+  const name = (id: string) => `${id} ${f.tasks.find((t) => t.id === id)?.tarea ?? ""}`.trim();
+  return [
+    { title: "Resumen del día", lines: (data.summary || "—").split("\n") },
+    finished.length
+      ? { title: `Tareas terminadas según ${userName(ctx)}`, lines: finished.map((id) => `• ${name(id)}`) }
+      : { title: "Tareas terminadas", lines: ["Ninguna hoy."] },
+    {
+      title: "Avance contra el cronograma",
+      lines: [progressLine("Obra", f.progress), ...f.phases.map((p) => progressLine(p.phase, p.progress))],
+    },
+    { title: "Se espera que continúen con", lines: f.next.length ? f.next.map((t) => `• ${name(t.id)}`) : ["—"] },
+    {
+      title: "Compras",
+      lines: [
+        ...(f.purchases.length ? f.purchases.map((p) => `• ${p}`) : ["Ninguna."]),
+        `Caja menor: ${formatPesos(f.balance)}`,
+      ],
+    },
+    { title: "¿Llegó lo esperado hoy?", lines: expectedLines(data) },
+    { title: "Fotos", lines: ["—"] },
+  ];
 }
 
-/** Texto plano del reporte. */
-function reportText(ctx: Context, data: Data, f: Facts): string {
+/** El reporte en HTML para Telegram (títulos en negrilla) o en texto plano para la hoja. */
+function reportText(ctx: Context, data: Data, f: Facts, html = false): string {
+  const bold = (s: string) => html ? `<b>${escapeHtml(s)}</b>` : s;
+  const plain = (s: string) => html ? escapeHtml(s) : s;
   return [
-    `REPORTE – ${shortDate(data.date)}`,
-    "Resumen del día:",
-    data.summary || "—",
-    "",
-    finishedText(ctx, data, f),
-    progressLine("Avance de la obra", f.progress),
-    ...f.phases.map((p) => progressLine(`Avance de ${p.phase}`, p.progress)),
-    `Se espera que ahora continúen con: ${f.next.map((t) => `${t.id} ${t.tarea}`).join("; ") || "—"}`,
-    `Compras: ${f.purchases.join("; ") || "ninguna"} · Caja menor: ${formatPesos(f.balance)}`,
-    `¿Llegó lo esperado hoy?: ${expectedText(data)}`,
-    "Fotos: —",
+    bold(`REPORTE – ${shortDate(data.date)}`),
+    ...reportSections(ctx, data, f).flatMap((s) => ["", bold(s.title), ...s.lines.map(plain)]),
   ].join("\n");
 }
 
@@ -476,7 +486,7 @@ function previewKeyboard(data: Data): Keyboard {
 async function showPreview(ctx: Context, data: Data): Promise<void> {
   const f = await sheetFacts(data);
   const question = f.saved ? "Ya hay un reporte de hoy. ¿Lo actualizo con este?" : "¿Lo guardo?";
-  const msg = await say(ctx, data, `${escapeHtml(reportText(ctx, data, f))}\n\n${question}`, previewKeyboard(data));
+  const msg = await say(ctx, data, `${reportText(ctx, data, f, true)}\n\n${question}`, previewKeyboard(data));
   await save(ctx, "vista", { ...data, msg });
 }
 
@@ -586,10 +596,12 @@ async function saveReport(ctx: Context, session: Session<Data>, messageId: numbe
   const data = session.datos;
   const finished = data.finished ?? [];
   let text: string;
+  let html: string;
   let previous: Row | undefined;
   try {
     const f = await sheetFacts(data);
     text = reportText(ctx, data, f);
+    html = reportText(ctx, data, f, true);
     const { Tareas, Esperado, Reportes } = await readTabs(["Tareas", "Esperado", "Reportes"]);
     const tasks = readTasks(Tareas);
     previous = todayReport(Reportes, data.date);
@@ -639,7 +651,7 @@ async function saveReport(ctx: Context, session: Session<Data>, messageId: numbe
   await editMessageText(
     ctx.chatId,
     messageId,
-    `${escapeHtml(text)}\n\n✅ Reporte ${previous ? "actualizado" : "guardado"}.`,
+    `${html}\n\n✅ Reporte ${previous ? "actualizado" : "guardado"}.`,
   );
   if (!(ctx.role === "carlos" && ctx.place === "private")) {
     const who = ctx.role === "hermano"
@@ -647,6 +659,6 @@ async function saveReport(ctx: Context, session: Session<Data>, messageId: numbe
       : previous
       ? "Actualizaste"
       : "Guardaste";
-    await sendMessage({ chatId: envNumber("CARLOS_TG_ID") }, `${who} el reporte:\n\n${escapeHtml(text)}`);
+    await sendMessage({ chatId: envNumber("CARLOS_TG_ID") }, `${who} el reporte:\n\n${html}`);
   }
 }
