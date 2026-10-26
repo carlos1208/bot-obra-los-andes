@@ -13,6 +13,7 @@ import {
 } from "../_shared/telegram.ts";
 import * as afterPhotos from "./agents/after_photos.ts";
 import * as beforePhotos from "./agents/before_photos.ts";
+import * as dashboard from "./agents/dashboard.ts";
 import * as expenses from "./agents/expenses.ts";
 import { interpret } from "./agents/interpret.ts";
 import * as mailInvoices from "./agents/mail_invoices.ts";
@@ -35,6 +36,7 @@ const HELP = [
   "/antes – subir fotos ANTES (tu hermano: ANTES por imprevisto)",
   "/despues – subir fotos DESPUÉS",
   "/pendientes – pares por validar y por revisar en sitio (Carlos)",
+  "/tablero – tu enlace a la página de la obra (por privado)",
   "«Marcar H1 cumplido» – fecha de cumplido de un hito (Carlos, por privado)",
   "",
   "Por privado también respondo preguntas, en texto o voz: «¿qué toca esta semana?».",
@@ -80,6 +82,7 @@ export async function route(ctx: Context): Promise<void> {
   if (command === "pendientes") return await afterPhotos.pending(ctx);
   if (command === "pago") return await payments.start(ctx);
   if (command === "correo") return await mailInvoices.start(ctx);
+  if (command === "tablero") return await dashboard.link(ctx);
   if (command) {
     // /start, /ayuda y los comandos que todavía no existen.
     if (ctx.place === "private") await ctx.reply(HELP);

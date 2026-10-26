@@ -210,7 +210,11 @@ async function driveApi(url: URL, init: RequestInit): Promise<Response> {
     return Response.json({ files: driveQuery(url.searchParams.get("q")!) });
   }
   const id = url.pathname.match(/^\/drive\/v3\/files\/([^/]+)$/)?.[1];
-  if (id && method === "GET") return new Response(new Uint8Array([4, 5, 6])); // alt=media
+  if (id && method === "GET") {
+    // alt=media: Drive responde con el tipo guardado del archivo.
+    const type = drive.find((f) => f.id === id)?.mimeType ?? "application/octet-stream";
+    return new Response(new Uint8Array([4, 5, 6]), { headers: { "Content-Type": type } });
+  }
   if (id && method === "PATCH") {
     const file = drive.find((f) => f.id === id)!;
     const body = JSON.parse(String(init.body));

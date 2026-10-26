@@ -26,6 +26,7 @@ await tg("setMyCommands", {
     { command: "antes", description: "Subir fotos ANTES" },
     { command: "despues", description: "Subir fotos DESPUÉS" },
     { command: "pendientes", description: "Pares por validar (Carlos)" },
+    { command: "tablero", description: "Tu enlace a la página de la obra" },
   ],
 });
 const info = await tg<{ url: string; pending_update_count: number; last_error_message?: string }>("getWebhookInfo");

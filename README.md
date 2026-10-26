@@ -15,26 +15,28 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 
 ## Estado por fases
 
-| Fase                   | Qué incluye                                                                                                     | Estado |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------- | ------ |
-| 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista  |
-| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista  |
-| 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | Lista  |
-| 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre», pares en el reporte                    | Lista  |
-| 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Lista  |
-| 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Lista  |
+| Fase                   | Qué incluye                                                                                                     | Estado     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista      |
+| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista      |
+| 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | Lista      |
+| 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre», pares en el reporte                    | Lista      |
+| 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Lista      |
+| 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Lista      |
+| Tablero                | Página con avance y cronograma, dinero, compras y fotos; un enlace para cada uno (`/tablero`)                   | Por probar |
 
 ## Estructura
 
 ```
 semillas/                 CSV de cada pestaña, catálogo fotos_antes.json, facturas_esperadas.csv
-apps-script/              correo.gs: el Apps Script de /correo (va en tu cuenta de Google)
+apps-script/              correo.gs (/correo) y tablero.gs (muestra el tablero): van en tu cuenta de Google
 scripts/                  Scripts locales: ids de Telegram, crear la hoja, OAuth de Drive, webhook, validar la IA
 supabase/migrations/      Tablas técnicas (updates, sesiones, álbumes, reintentos, errores)
 supabase/functions/
   _shared/                Clientes de Telegram, Sheets, Drive, Gemini y Postgres; extractores; reglas de la obra
   telegram/               Webhook, enrutador y agentes
   programado/             Avisos programados (los llama pg_cron)
+  tablero/                Página de la obra: datos, HTML y fotos con enlace firmado
 tests/                    deno test
 ```
 
@@ -367,6 +369,70 @@ versión**. Así la URL no cambia.
   Revisa `Gastos`, `Productos` (las dos columnas de nombre), el PDF en Drive y la etiqueta en Gmail.
 - Otra vez `/correo`: ya no sale.
 
+### Tablero (página de la obra)
+
+Una página para el celular con lo que hay en la hoja **en el momento en que la abres** (nada se guarda aparte):
+
+- **Avance y cronograma:** avance real y esperado de hoy, la curva día a día (el real sale de los reportes y, hoy, de la
+  hoja), los pendientes atrasados (los mismos del aviso diario), las tareas de cada semana tipo Gantt (lunes a sábado,
+  con festivos) y los hitos.
+- **Dinero** (solo tú): disponible de los 12 M, presupuesto y gastado por capítulo (lo que cuenta en los 12 M), lo
+  pagado al albañil con su saldo y la reserva, y los pagos.
+- **Compras:** total, caja menor (efectivo y facturas por reponer), gastos por semana de obra y por capítulo, los
+  últimos gastos y los productos con un buscador.
+- **Fotos y reportes:** los pares de Drive con su estado y sus fotos ANTES y DESPUÉS, las fotos del catálogo que no
+  tienen ANTES y los últimos 7 reportes.
+
+Cada uno tiene su enlace: el tuyo muestra todo; el de tu hermano no muestra la sección Dinero ni los valores de los
+hitos, igual que el bot mientras `hermano_ve_dinero = no`. Compras y caja menor sí las ve, como en las preguntas.
+
+**Por qué un Apps Script:** Supabase no sirve páginas HTML en su dominio gratuito (las cambia a texto plano; solo lo
+permite con dominio propio, que es de pago). La función `tablero` arma toda la página y `apps-script/tablero.gs` solo la
+muestra: le pasa el código del enlace y no lee la hoja ni Drive. Las fotos sí las entrega la función, con un enlace
+firmado que sirve solo para esa foto y vence en dos días. Google muestra arriba una franja gris («Esta aplicación la
+creó un usuario de Google Apps Script»): es normal.
+
+**Puesta en marcha** (una sola vez):
+
+1. `git pull` y `deno task test`.
+2. `deno task secreto-tablero`: guarda `TABLERO_TOKEN_CARLOS` y `TABLERO_TOKEN_HERMANO` en `.env.local` (cada uno es el
+   código de un enlace).
+3. `npx supabase functions deploy tablero --use-api`.
+4. En <https://script.google.com> → **Nuevo proyecto**. Ponle de nombre «Bot obra – tablero». Borra lo que trae
+   `Código.gs`, pega todo `apps-script/tablero.gs` y guarda.
+5. ⚙ **Configuración del proyecto** → **Propiedades de la secuencia de comandos** → **Agregar**: propiedad
+   `FUNCION_URL`, valor `https://<PROJECT_REF>.supabase.co/functions/v1/tablero` (con tu `PROJECT_REF`). Guarda.
+6. **Implementar** → **Nueva implementación** → tipo **Aplicación web**. «Ejecutar como»: **Yo**. «Quién tiene acceso»:
+   **Cualquier usuario** (sin un código válido no muestra nada). **Implementar** y autoriza «Conectarse a un servicio
+   externo» (si sale «Google no verificó esta app»: _Configuración avanzada_ → _Ir a Bot obra – tablero_).
+7. Copia la **URL de la aplicación web** (termina en `/exec`) en `TABLERO_URL` de `.env.local` y corre
+   `deno task secretos`.
+8. Despliega el bot y el menú (agrega `/tablero`):
+   ```
+   npx supabase functions deploy telegram --use-api
+   deno task webhook
+   ```
+
+**Prueba:**
+
+- `/tablero` por tu privado: llega «📊 Abrir el tablero de la obra». Ábrelo en el celular: arriba dice «Vista completa»
+  y están las cuatro secciones.
+- Avance: la semana de obra de hoy, la curva con «hoy» y la semana actual abierta. Lo esperado sin confirmar (p. ej. «El
+  albañil empieza la obra», si nadie lo ha marcado) sale en «Atrasado».
+- Toca la curva: sale el día con el avance esperado (y el real, si hubo reporte).
+- Dinero: el disponible de los 12 M coincide con `/estado`.
+- Compras: escribe «lavamanos» en el buscador; la lista y el total cambian.
+- Fotos: si ya hay pares en Drive, se ven sus fotos y su estado.
+- Cambia un dato en la hoja (p. ej. una tarea a `terminada`) y vuelve a abrir el enlace: ya sale.
+- Borra una letra del código al final del enlace: «Este enlace no sirve».
+- `/tablero` en un tema del grupo: pide que lo escribas por privado, sin enlace.
+- La vista de tu hermano le llega cuando él escriba `/tablero` (necesita `HERMANO_TG_ID`). Para verla antes, abre tú la
+  URL `/exec?t=` con el valor de `TABLERO_TOKEN_HERMANO` de `.env.local` (no lo pegues en el chat): no debe salir Dinero
+  ni los valores de los hitos.
+
+Si cambias `tablero.gs`, en Apps Script: **Implementar** → **Gestionar implementaciones** → editar → versión **Nueva
+versión**. Así la URL no cambia.
+
 ## Uso diario
 
 - **Cambiar el modelo de Gemini:** `npx supabase secrets set GEMINI_MODEL=<modelo>` (o `GEMINI_MODEL_FALLBACK`). No hay
@@ -395,15 +461,16 @@ versión**. Así la URL no cambia.
 
 Después de cambiar cualquier valor en `.env.local`: `deno task secretos`.
 
-| Clave                        | Cómo                                                                                           |
-| ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| `TELEGRAM_BOT_TOKEN`         | BotFather → `/revoke`. Pega el nuevo token y corre `deno task webhook`.                        |
-| `TELEGRAM_WEBHOOK_SECRET`    | `deno task secreto`, `deno task secretos` y `deno task webhook`.                               |
-| `PROGRAMADO_SECRET`          | `deno task secreto-programado`, `deno task secretos` y cambia `programado_secreto` en Vault.   |
-| `GOOGLE_SA_PRIVATE_KEY`      | Crea una clave nueva en la cuenta de servicio, cámbiala y borra la vieja.                      |
-| `GOOGLE_OAUTH_REFRESH_TOKEN` | Quita el acceso en <https://myaccount.google.com/connections> y corre `deno task oauth-drive`. |
-| `GEMINI_API_KEY`             | Crea una nueva en Google AI Studio y borra la vieja.                                           |
-| Claves de Supabase           | Se rotan en el panel. Las funciones las reciben solas.                                         |
+| Clave                        | Cómo                                                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `TELEGRAM_BOT_TOKEN`         | BotFather → `/revoke`. Pega el nuevo token y corre `deno task webhook`.                                           |
+| `TELEGRAM_WEBHOOK_SECRET`    | `deno task secreto`, `deno task secretos` y `deno task webhook`.                                                  |
+| `PROGRAMADO_SECRET`          | `deno task secreto-programado`, `deno task secretos` y cambia `programado_secreto` en Vault.                      |
+| `TABLERO_TOKEN_*`            | `deno task secreto-tablero` y `deno task secretos`. Los enlaces viejos dejan de servir: `/tablero` da los nuevos. |
+| `GOOGLE_SA_PRIVATE_KEY`      | Crea una clave nueva en la cuenta de servicio, cámbiala y borra la vieja.                                         |
+| `GOOGLE_OAUTH_REFRESH_TOKEN` | Quita el acceso en <https://myaccount.google.com/connections> y corre `deno task oauth-drive`.                    |
+| `GEMINI_API_KEY`             | Crea una nueva en Google AI Studio y borra la vieja.                                                              |
+| Claves de Supabase           | Se rotan en el panel. Las funciones las reciben solas.                                                            |
 
 ## Semillas
 

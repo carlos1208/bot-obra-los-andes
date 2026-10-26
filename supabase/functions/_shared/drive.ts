@@ -149,6 +149,13 @@ export async function downloadDriveFile(id: string): Promise<Uint8Array<ArrayBuf
   return new Uint8Array(await r.arrayBuffer());
 }
 
+/** Contenido y tipo (el que guardó Drive) de un archivo que creó el bot. */
+export async function driveMedia(id: string): Promise<{ bytes: Uint8Array<ArrayBuffer>; mime: string }> {
+  const r = await fetch(`${API}/files/${id}?alt=media`, { headers: { Authorization: `Bearer ${await driveToken()}` } });
+  if (!r.ok) throw new Error(`Drive ${r.status} al descargar ${id}`);
+  return { bytes: new Uint8Array(await r.arrayBuffer()), mime: r.headers.get("Content-Type") ?? "" };
+}
+
 /** Manda un archivo o carpeta a la papelera de Drive (se puede recuperar 30 días). */
 export async function trashFile(id: string): Promise<void> {
   await driveFetch(`${API}/files/${id}?fields=id`, {

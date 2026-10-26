@@ -9,6 +9,10 @@ verify_jwt = false
 # La llama pg_cron con pg_net: la función verifica X-Programado-Secret (guardado en Vault).
 verify_jwt = false
 
+[functions.tablero]
+# La llama el Apps Script del tablero (y el navegador, para las fotos): la función verifica el código del enlace.
+verify_jwt = false
+
 [edge_runtime]
 # Solo para pruebas locales: deja terminar las tareas en segundo plano.
 policy = "per_worker"

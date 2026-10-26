@@ -25,12 +25,14 @@ import {
   type Config,
   isHoliday,
   isWorkDay,
+  obraEnd,
   overdueTasks,
   pettyCashBalance,
   pettyCashToRefill,
   readConfig,
   readTasks,
   type Row,
+  unconfirmedExpected,
   weekRange,
   workDaysBetween,
   workWeek,
@@ -77,12 +79,6 @@ const weekTitle = (cfg: Config, today: string) => {
   const week = workWeek(today, cfg);
   return `${week ? `SEMANA ${week}` : "SEMANA"} – ${shortDate(monday)} a ${shortDate(saturday)}`;
 };
-
-/** Último día de obra (con zócalos, si hay fecha). */
-const lastDay = (cfg: Config) =>
-  cfg.entrega_con_zocalos && cfg.entrega_con_zocalos > cfg.entrega_sin_zocalos
-    ? cfg.entrega_con_zocalos
-    : cfg.entrega_sin_zocalos;
 
 function goalsOf(goals: Row[], monday: string): Row[] {
   return goals.filter((r) => cellDate(r.inicio_semana) === monday);
@@ -137,7 +133,7 @@ async function daily(today: string): Promise<string[]> {
   const sheet = await readTabs(["Config", "Esperado", "Reportes", "Objetivos", "Tareas", "Gastos", "Pagos"]);
   const cfg = readConfig(sheet.Config);
   const sent: string[] = [];
-  const inWork = cfg.fecha_inicio <= today && today <= lastDay(cfg);
+  const inWork = cfg.fecha_inicio <= today && today <= obraEnd(cfg);
 
   if (!inWork) sent.push("sin avisos: hoy no hay obra");
   else if (!isWorkDay(today, cfg)) {
@@ -155,7 +151,7 @@ async function daily(today: string): Promise<string[]> {
   }
 
   const { monday } = weekRange(today);
-  if (weekday(today) === 6 && cfg.fecha_inicio <= today && monday <= lastDay(cfg)) {
+  if (weekday(today) === 6 && cfg.fecha_inicio <= today && monday <= obraEnd(cfg)) {
     await toBoth(await weeklyClose(today, cfg, sheet));
     sent.push("cierre de la semana");
   }
@@ -172,7 +168,7 @@ const MAX_BUTTONS = 12;
  * uno, al privado de Carlos. Marca aviso_enviado en lo esperado la primera vez. Devuelve cuántos son.
  */
 async function overdueReminder(today: string, cfg: Config, sheet: Record<string, Row[]>): Promise<number> {
-  const expected = expectedOf(sheet.Esperado, "0000-01-01", today).filter((r) => normalize(r.llego) !== "si");
+  const expected = unconfirmedExpected(sheet.Esperado, today);
   const tasks = overdueTasks(readTasks(sheet.Tareas), today, cfg);
   if (!expected.length && !tasks.length) return 0;
 

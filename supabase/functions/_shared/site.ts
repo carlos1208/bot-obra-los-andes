@@ -212,6 +212,23 @@ export function overdueTasks(tasks: Task[], today: string, cfg: Config): { task:
     .sort((a, b) => b.days - a.days || a.task.id.localeCompare(b.task.id));
 }
 
+/** Último día de obra: la entrega con zócalos, si hay fecha y es posterior. */
+export function obraEnd(cfg: Config): string {
+  return cfg.entrega_con_zocalos && cfg.entrega_con_zocalos > cfg.entrega_sin_zocalos
+    ? cfg.entrega_con_zocalos
+    : cfg.entrega_sin_zocalos;
+}
+
+/** Lo esperado hasta hoy (incluido) que no llegó o nadie confirmó (llego distinto de «sí»), por fecha. */
+export function unconfirmedExpected(rows: Row[], today: string): Row[] {
+  return rows
+    .filter((r) => {
+      const date = cellDate(r.fecha);
+      return date !== null && date <= today && normalize(r.llego) !== "si";
+    })
+    .sort((a, b) => cellDate(a.fecha)!.localeCompare(cellDate(b.fecha)!));
+}
+
 /** Lo que sigue: tareas sin terminar (ni tentativas) cuyas dependencias ya están terminadas, por fecha de inicio. */
 export function nextTasks(tasks: Task[], finishedNow: string[] = [], limit = 3): Task[] {
   const done = new Set([...tasks.filter((t) => t.estado === "terminada").map((t) => t.id), ...finishedNow]);
