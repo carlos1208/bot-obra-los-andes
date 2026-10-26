@@ -1,13 +1,15 @@
 // Gastos y facturas: foto o PDF → Gemini → vista previa → «Caja menor» o «Pagó Carlos» →
 // «Sí, guardar» o «Corregir campo». Nada se escribe en la hoja hasta «Sí, guardar».
-// La factura se sube a Drive «Facturas/» y el enlace queda en la fila de Gastos.
+// La factura se sube a Drive «Facturas/», el enlace queda en la fila de Gastos y cada producto
+// va en una fila de Productos con el mismo número de factura y enlace.
 
 import { claimStep, deleteSession, readSession, saveSession, type Session } from "../../_shared/db.ts";
 import { FOLDERS, topFolder, uploadFile } from "../../_shared/drive.ts";
 import { envNumber } from "../../_shared/env.ts";
-import { extractInvoice, extractNoInvoicePurchase } from "../../_shared/extractors.ts";
+import { extractInvoice, extractNoInvoicePurchase, type InvoiceLine } from "../../_shared/extractors.ts";
 import {
   cellDate,
+  cellNumber,
   escapeHtml,
   formatPesos,
   normalize,
@@ -16,7 +18,8 @@ import {
   shortDate,
   todayISO,
 } from "../../_shared/format.ts";
-import { appendRow, readTabs } from "../../_shared/sheets.ts";
+import { lineEditText, linesTotal, lineText, parseLines } from "../../_shared/products.ts";
+import { appendRow, appendRows, readTabs } from "../../_shared/sheets.ts";
 import { type Config, pettyCashBalance, readConfig, type Row } from "../../_shared/site.ts";
 import {
   answerCallback,
@@ -38,7 +41,7 @@ import * as report from "./report.ts";
 export const FLOW = "gasto";
 
 type Payment = "caja menor" | "Carlos";
-type Field = "supplier" | "tax_id" | "date" | "number" | "items" | "total" | "chapter" | "payment";
+type Field = "supplier" | "tax_id" | "date" | "number" | "items" | "products" | "total" | "chapter" | "payment";
 
 const FIELD_NAMES: Record<Field, string> = {
   supplier: "Proveedor",
@@ -46,6 +49,7 @@ const FIELD_NAMES: Record<Field, string> = {
   date: "Fecha",
   number: "Número",
   items: "Ítems",
+  products: "Productos",
   total: "Total",
   chapter: "Capítulo",
   payment: "Pago",
@@ -63,11 +67,15 @@ interface Draft {
   tax_id: string;
   date: string; // "" = falta
   number: string;
-  items: string;
+  products: InvoiceLine[]; // factura: una por línea
+  items: string; // sin factura: qué se compró
   total: number | null;
   chapter: string;
   payment: Payment | "";
   note: string;
+  duplicate?: string; // aviso de factura ya registrada, tal como se mostró
+  link?: string; // la factura ya quedó en Drive
+  expenseSaved?: boolean; // la fila de Gastos ya quedó (si falló Productos, no se repite)
 }
 
 /** Sesión del reporte que abrió «Agregar compra»: se restaura al terminar el gasto. */
@@ -88,9 +96,46 @@ async function save(ctx: Context, step: string, data: Data): Promise<void> {
   await saveSession(ctx.chatId, ctx.userId, FLOW, step, { ...data, hilo: ctx.threadId ?? null });
 }
 
+const chaptersOf = (budget: Row[]) => budget.map((r) => String(r.capitulo ?? "").trim()).filter(Boolean);
+
 async function readChapters(): Promise<string[]> {
-  const { Presupuesto } = await readTabs(["Presupuesto"]);
-  return Presupuesto.map((r) => String(r.capitulo ?? "").trim()).filter(Boolean);
+  return chaptersOf((await readTabs(["Presupuesto"])).Presupuesto);
+}
+
+const invoiceKey = (s: unknown) => String(s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+const taxKey = (s: unknown) => String(s ?? "").replace(/\D/g, "").slice(0, 9);
+
+/**
+ * Fila de Gastos con la misma factura: mismo número (y mismo NIT, si las dos lo tienen) o, si no hay
+ * número, misma fecha, proveedor y total.
+ */
+function findDuplicate(d: Draft, expenses: Row[]): Row | undefined {
+  if (d.noInvoice) return undefined;
+  const number = invoiceKey(d.number);
+  if (number) {
+    return expenses.find((r) =>
+      invoiceKey(r.numero_factura) === number &&
+      !(taxKey(r.nit) && taxKey(d.tax_id) && taxKey(r.nit) !== taxKey(d.tax_id))
+    );
+  }
+  if (!d.date || d.total === null) return undefined;
+  return expenses.find((r) =>
+    !invoiceKey(r.numero_factura) && cellDate(r.fecha) === d.date && cellNumber(r.valor) === d.total &&
+    normalize(r.proveedor) === normalize(d.supplier)
+  );
+}
+
+function duplicateWarning(d: Draft, expenses: Row[]): string | undefined {
+  const r = findDuplicate(d, expenses);
+  if (!r) return undefined;
+  const date = cellDate(r.fecha);
+  const when = cellDate(r.registrado_el);
+  const who = String(r.registrado_por ?? "").trim();
+  return `⚠️ Esta factura ya está registrada: ${escapeHtml(String(r.proveedor || "—"))}, ${
+    date ? shortDate(date) : "sin fecha"
+  }, ${formatPesos(cellNumber(r.valor))}${when ? `, registrada el ${shortDate(when)}` : ""}${
+    who ? ` por ${escapeHtml(who)}` : ""
+  }. Si es la misma, toca «Cancelar».`;
 }
 
 function countNoInvoiceToday(expenses: Row[], today: string): number {
@@ -115,9 +160,9 @@ export async function receiveInvoice(ctx: Context, file: ReceivedImage, back?: R
     return;
   }
   const wait = await ctx.reply("Leyendo la factura…");
-  const chapters = await readChapters();
+  const { Presupuesto, Gastos } = await readTabs(["Presupuesto", "Gastos"]);
   const { bytes } = await downloadFile(file.fileId);
-  const inv = await extractInvoice({ mimeType: file.mime, bytes }, chapters);
+  const inv = await extractInvoice({ mimeType: file.mime, bytes }, chaptersOf(Presupuesto));
   const draft: Draft = {
     noInvoice: false,
     file,
@@ -125,12 +170,14 @@ export async function receiveInvoice(ctx: Context, file: ReceivedImage, back?: R
     tax_id: inv.tax_id ?? "",
     date: inv.date ?? "",
     number: inv.number ?? "",
-    items: inv.items.join(", "),
+    products: inv.products ?? [],
+    items: "",
     total: inv.total,
     chapter: inv.chapter ?? "",
     payment: "",
     note: "",
   };
+  draft.duplicate = duplicateWarning(draft, Gastos);
   await showPreview(ctx, { back, draft }, wait.message_id);
 }
 
@@ -181,6 +228,7 @@ async function receiveProduct(ctx: Context, data: Data, photo: ReceivedImage, no
     tax_id: "",
     date: todayISO(),
     number: "",
+    products: [],
     items: got.items,
     total,
     chapter: got.chapter,
@@ -194,19 +242,48 @@ async function receiveProduct(ctx: Context, data: Data, photo: ReceivedImage, no
 
 const paymentLabel = (p: Payment | "") => p === "" ? "elige abajo" : p === "Carlos" ? "Pagó Carlos" : "Caja menor";
 
-function previewText(d: Draft, warning?: string): string {
+/** Hasta cuántos productos caben en la vista previa (Telegram corta en 4096 caracteres). */
+const MAX_SHOWN_PRODUCTS = 40;
+
+function productLines(d: Draft): string[] {
+  if (!d.products.length) return ["Productos: <i>falta</i>"];
+  const shown = d.products.slice(0, MAX_SHOWN_PRODUCTS).map((l) => `• ${escapeHtml(short(lineText(l), 70))}`);
+  const more = d.products.length - shown.length;
+  return [`Productos (${d.products.length}):`, ...shown, ...(more > 0 ? [`… y ${more} más`] : [])];
+}
+
+/** Avisos que acompañan la vista previa mientras no se corrijan. */
+function checks(d: Draft): string[] {
+  const out = d.duplicate ? [d.duplicate] : [];
+  if (!d.noInvoice && d.products.length && d.total !== null) {
+    const missing = d.products.filter((l) => l.total === null).length;
+    const sum = linesTotal(d.products);
+    if (missing) out.push(`⚠️ Falta el valor de ${missing} producto${missing > 1 ? "s" : ""}. Toca «Corregir campo».`);
+    else if (sum !== d.total) {
+      out.push(
+        `⚠️ Los productos suman ${formatPesos(sum)} y el total es ${formatPesos(d.total)}. Toca «Corregir campo».`,
+      );
+    }
+  }
+  return out;
+}
+
+function previewText(d: Draft, warning?: string, saved = false): string {
   const missing = "<i>falta</i>";
   const value = (s: string, required = true) => s ? escapeHtml(s) : required ? missing : "—";
+  const notes = saved ? [] : checks(d);
   return [
     `<b>${d.noInvoice ? "Compra sin factura" : "Factura"}</b>`,
     `Proveedor: ${value(d.supplier)}`,
     ...(d.noInvoice ? [] : [`NIT: ${value(d.tax_id, false)}`]),
     `Fecha: ${d.date ? shortDate(d.date) : missing}`,
-    ...(d.noInvoice ? [`Nota: ${escapeHtml(d.note)}`] : [`Número: ${value(d.number, false)}`]),
-    `Ítems: ${value(d.items)}`,
+    ...(d.noInvoice
+      ? [`Nota: ${escapeHtml(d.note)}`, `Ítems: ${value(d.items)}`]
+      : [`Número: ${value(d.number, false)}`, ...productLines(d)]),
     `Total: ${d.total === null ? missing : formatPesos(d.total)}`,
     `Capítulo: ${value(d.chapter)}`,
     `Pago: ${paymentLabel(d.payment)}`,
+    ...(notes.length ? ["", ...notes] : []),
     ...(warning ? ["", warning] : []),
   ].join("\n");
 }
@@ -236,7 +313,7 @@ async function showPreview(ctx: Context, data: Data, editId?: number, warning?: 
 function fieldKeyboard(d: Draft): Keyboard {
   const fields: Field[] = d.noInvoice
     ? ["supplier", "date", "items", "total", "chapter", "payment"]
-    : ["supplier", "tax_id", "date", "number", "items", "total", "chapter", "payment"];
+    : ["supplier", "tax_id", "date", "number", "products", "total", "chapter", "payment"];
   const rows: Keyboard = [];
   for (let i = 0; i < fields.length; i += 2) {
     rows.push(fields.slice(i, i + 2).map((f) => button(FIELD_NAMES[f], `gas:f:${f}`)));
@@ -285,7 +362,8 @@ export async function onButton(ctx: Context): Promise<void> {
 
   if (action === "x") {
     await answerCallback(cb.id);
-    await editMessageText(ctx.chatId, messageId, "Cancelado. No guardé nada.");
+    const done = d?.expenseSaved ? "El gasto ya quedó en Gastos, sin sus productos." : "No guardé nada.";
+    await editMessageText(ctx.chatId, messageId, `Cancelado. ${done}`);
     await finish(ctx, data.back);
     return;
   }
@@ -350,7 +428,33 @@ async function chooseField(ctx: Context, data: Data, field: Field, messageId: nu
   }
   await editKeyboard(ctx.chatId, messageId);
   await save(ctx, "campo", { ...data, field, msg: undefined });
+  if (field === "products") return await askProducts(ctx, d);
   await ctx.reply(ASK_FIELD[field] ?? `Escribe ${FIELD_NAMES[field].toLowerCase()}.`);
+}
+
+const PRODUCTS_EXAMPLE = "2 Cemento gris de 50 kg 64.000\n1 Brocha de 3 pulgadas 12.000";
+
+/** Manda la lista actual en el formato que se corrige, para copiarla, editarla y mandarla de vuelta. */
+async function askProducts(ctx: Context, d: Draft): Promise<void> {
+  if (!d.products.length) {
+    await ctx.reply(
+      `Escribe los productos, uno por línea: cantidad, producto y valor de la línea. Por ejemplo:\n${PRODUCTS_EXAMPLE}`,
+    );
+    return;
+  }
+  await ctx.reply(
+    "Copia la lista, corrígela y mándala completa. Una línea por producto: cantidad, producto y valor de la línea.",
+  );
+  // En partes si es muy larga (Telegram corta en 4096 caracteres).
+  let part: string[] = [];
+  for (const line of d.products.map((l) => escapeHtml(lineEditText(l)))) {
+    if (part.length && [...part, line].join("\n").length > 3500) {
+      await ctx.reply(part.join("\n"));
+      part = [];
+    }
+    part.push(line);
+  }
+  await ctx.reply(part.join("\n"));
 }
 
 // --- Mensajes mientras el flujo está abierto ---------------------------------
@@ -417,8 +521,21 @@ async function setField(ctx: Context, data: Data, text: string): Promise<void> {
       return;
     }
     d.date = iso;
-  } else if (field !== "chapter" && field !== "payment") {
+  } else if (field === "products") {
+    const got = parseLines(text);
+    if ("bad" in got) {
+      const which = got.bad.length ? `estas líneas:\n${escapeHtml(got.bad.join("\n"))}` : "la lista.";
+      await ctx.reply(
+        `No entendí ${which}\nCada línea lleva cantidad, producto y valor. Por ejemplo:\n${PRODUCTS_EXAMPLE}`,
+      );
+      return;
+    }
+    d.products = got.lines;
+  } else if (field === "supplier" || field === "tax_id" || field === "number" || field === "items") {
     d[field] = text;
+  }
+  if (["supplier", "tax_id", "date", "number", "total"].includes(field) && !d.noInvoice) {
+    d.duplicate = duplicateWarning(d, (await readTabs(["Gastos"])).Gastos);
   }
   await showPreview(ctx, { back: data.back, draft: d });
 }
@@ -453,64 +570,96 @@ async function saveExpense(ctx: Context, session: Session<Data>, messageId: numb
   }
   await answerCallback(cb.id);
 
-  let link = "";
   let cfg!: Config;
   try {
-    // Controles con la hoja de este momento.
+    // Controles con la hoja de este momento (si la fila de Gastos ya quedó, solo falta Productos).
     const { Config, Gastos } = await readTabs(["Config", "Gastos"]);
     cfg = readConfig(Config);
-    if (d.noInvoice) {
-      const problem = d.total > cfg.compra_sin_factura_max
-        ? `Sin factura solo se aceptan compras de hasta ${
-          formatPesos(cfg.compra_sin_factura_max)
-        }. Corrige el total o pide la factura.`
-        : countNoInvoiceToday(Gastos, todayISO()) >= cfg.compras_sin_factura_por_dia
-        ? `Hoy ya se registró el máximo de compras sin factura (${cfg.compras_sin_factura_por_dia}). Pide la factura.`
-        : null;
-      if (problem) {
-        await showPreview(ctx, data, messageId, `⚠️ ${problem}`);
+    if (!d.expenseSaved) {
+      if (d.noInvoice) {
+        const problem = d.total > cfg.compra_sin_factura_max
+          ? `Sin factura solo se aceptan compras de hasta ${
+            formatPesos(cfg.compra_sin_factura_max)
+          }. Corrige el total o pide la factura.`
+          : countNoInvoiceToday(Gastos, todayISO()) >= cfg.compras_sin_factura_por_dia
+          ? `Hoy ya se registró el máximo de compras sin factura (${cfg.compras_sin_factura_por_dia}). Pide la factura.`
+          : null;
+        if (problem) {
+          await showPreview(ctx, data, messageId, `⚠️ ${problem}`);
+          return;
+        }
+      }
+      const capWarning = await applyCap(ctx, d, cfg);
+      if (capWarning) {
+        await showPreview(ctx, data, messageId, capWarning);
+        return;
+      }
+      // Si la registraron mientras tanto, se avisa antes de guardar.
+      const duplicate = duplicateWarning(d, Gastos);
+      if (duplicate && duplicate !== d.duplicate) {
+        d.duplicate = duplicate;
+        await showPreview(ctx, data, messageId);
         return;
       }
     }
-    const capWarning = await applyCap(ctx, d, cfg);
-    if (capWarning) {
-      await showPreview(ctx, data, messageId, capWarning);
-      return;
+    if (d.link === undefined) {
+      const folder = await topFolder(FOLDERS.invoices);
+      const { bytes } = await downloadFile(d.file.fileId);
+      const uploaded = await uploadFile({ name: invoiceFileName(d), parent: folder.id, mimeType: d.file.mime, bytes });
+      d.link = uploaded.webViewLink ?? "";
     }
-    const folder = await topFolder(FOLDERS.invoices);
-    const { bytes } = await downloadFile(d.file.fileId);
-    const uploaded = await uploadFile({ name: invoiceFileName(d), parent: folder.id, mimeType: d.file.mime, bytes });
-    link = uploaded.webViewLink ?? "";
-    await appendRow("Gastos", {
-      fecha: d.date,
-      proveedor: d.supplier,
-      nit: d.tax_id,
-      numero_factura: d.number,
-      items: d.items,
-      capitulo: d.chapter,
-      valor: d.total,
-      medio_pago: d.payment,
-      cuenta_12M: "sí",
-      registrado_por: roleLabel(ctx),
-      registrado_el: todayISO(),
-      enlace_factura: link,
-      nota: d.noInvoice ? `Sin factura. ${d.note}` : "",
-    });
+    if (!d.expenseSaved) {
+      await appendRow("Gastos", {
+        fecha: d.date,
+        proveedor: d.supplier,
+        nit: d.tax_id,
+        numero_factura: d.number,
+        items: d.noInvoice ? d.items : d.products.map((l) => l.name).join(", "),
+        capitulo: d.chapter,
+        valor: d.total,
+        medio_pago: d.payment,
+        cuenta_12M: "sí",
+        registrado_por: roleLabel(ctx),
+        registrado_el: todayISO(),
+        enlace_factura: d.link,
+        nota: d.noInvoice ? `Sin factura. ${d.note}` : "",
+      });
+      d.expenseSaved = true;
+    }
+    await appendRows("Productos", productRows(d));
   } catch (e) {
-    // No quedó guardado: se puede volver a tocar «Sí, guardar».
+    // No quedó todo guardado: se puede volver a tocar «Sí, guardar» y sigue donde iba.
     await save(ctx, "vista", data);
     throw e;
   }
 
-  await editMessageText(ctx.chatId, messageId, `${previewText(d)}\n\n✅ Guardado.`);
+  await editMessageText(ctx.chatId, messageId, `${previewText(d, undefined, true)}\n\n✅ Guardado.`);
   const fresh = await readTabs(["Gastos", "Pagos"]);
   const balance = pettyCashBalance(cfg, fresh.Gastos, fresh.Pagos);
   const where = d.supplier ? ` en ${escapeHtml(d.supplier)}` : "";
-  const file = link ? ` <a href="${link}">Factura en Drive</a>` : "";
+  const file = d.link ? ` <a href="${d.link}">Factura en Drive</a>` : "";
   await ctx.reply(
     `Guardé ${formatPesos(d.total)}${where} (${paymentLabel(d.payment)}). Caja menor: ${formatPesos(balance)}.${file}`,
   );
   await finish(ctx, data.back);
+}
+
+/** Filas de Productos: una por línea de la factura; sin factura, una con lo que se compró. */
+function productRows(d: Draft): Record<string, unknown>[] {
+  const lines: InvoiceLine[] = d.noInvoice ? [{ name: d.items, quantity: 1, unit: "und", total: d.total }] : d.products;
+  return lines.map((l) => ({
+    fecha: d.date,
+    proveedor: d.supplier,
+    numero_factura: d.number,
+    producto: l.name,
+    cantidad: l.quantity,
+    unidad: l.unit,
+    valor_unitario: l.total === null ? "" : Math.round(l.total / l.quantity),
+    valor_total: l.total ?? "",
+    capitulo: d.chapter,
+    enlace_factura: d.link,
+    registrado_el: todayISO(),
+  }));
 }
 
 /** Cierra el flujo y, si vino del reporte, vuelve a él. */

@@ -3,12 +3,20 @@
 
 import { generateJson, type InlineFile, type Part } from "./gemini.ts";
 
+/** Una línea de la factura: producto o servicio. */
+export interface InvoiceLine {
+  name: string;
+  quantity: number;
+  unit: string;
+  total: number | null; // lo pagado por la línea, en pesos enteros
+}
+
 export interface Invoice {
   supplier: string;
   tax_id: string | null;
   date: string | null; // AAAA-MM-DD
   number: string | null;
-  items: string[];
+  products: InvoiceLine[];
   total: number | null; // pesos enteros
   chapter: string;
 }
@@ -21,7 +29,11 @@ const INVOICE_INSTRUCTIONS =
 - total: el total a pagar, con IVA y redondeo, en pesos enteros. No es el efectivo recibido, el cambio ni el ahorro. Los pesos no llevan centavos: un punto o una coma seguidos de tres dígitos separan miles, y «,00» o «.00» al final son centavos en cero. «2.450.900,00», «$45.300» y «87,650» son 2450900, 45300 y 87650.
 - supplier: nombre comercial corto de la tienda, el que usa la gente; si no aparece, la razón social.
 - tax_id: NIT del vendedor como aparece (p. ej. 800.242.106-2). No el documento del cliente.
-- items: lo comprado, en frases cortas y claras en español (p. ej. «Lavamanos ovalado blanco»), sin códigos ni precios.
+- products: cada línea de la factura, en el orden impreso, también fletes, transporte, cortes y otros servicios. No son líneas los subtotales, el IVA, los descuentos generales ni las formas de pago.
+  - name: nombre corto y claro en español, con la medida o la presentación si la trae (p. ej. «Pintura blanca de 1 galón»). Sin código de barras ni SKU. Si una abreviatura no se entiende, déjala como está impresa.
+  - quantity: la cantidad de la línea («3.0000» es 3).
+  - unit: «und» si la factura dice NIU, UND, UN o no dice nada; «m2» para MTK o M2; «m» para MTR; «kg» para KGM; si no, la unidad impresa en minúscula.
+  - total: lo que se pagó por la línea, en pesos enteros: con IVA y ya restado el descuento o ahorro de esa línea. Suele ser el último valor de la línea (valor total o subtotal con impuesto), no el precio unitario de lista. Si no se ve, null.
 - chapter: el capítulo del presupuesto que mejor encaja con lo comprado.`;
 
 function invoiceSchema(chapters: string[]): Record<string, unknown> {
@@ -37,11 +49,24 @@ function invoiceSchema(chapters: string[]): Record<string, unknown> {
       tax_id: nullable("string", "NIT del vendedor"),
       date: nullable("string", "Fecha de expedición", { format: "date" }),
       number: nullable("string", "Número de la factura con prefijo"),
-      items: { type: "array", items: { type: "string" }, description: "Lo comprado, en frases cortas" },
+      products: {
+        type: "array",
+        description: "Líneas de la factura",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Producto o servicio" },
+            quantity: { type: "number", description: "Cantidad" },
+            unit: { type: "string", description: "Unidad: und, m2, m, kg…" },
+            total: nullable("integer", "Pagado por la línea, con IVA y descuento, en pesos enteros"),
+          },
+          required: ["name", "quantity", "unit", "total"],
+        },
+      },
       total: nullable("integer", "Total a pagar en pesos enteros"),
       chapter: oneOf(chapters, "Capítulo del presupuesto"),
     },
-    required: ["supplier", "tax_id", "date", "number", "items", "total", "chapter"],
+    required: ["supplier", "tax_id", "date", "number", "products", "total", "chapter"],
   };
 }
 

@@ -1,5 +1,6 @@
 // Gastos de punta a punta: factura → vista previa → caja menor o Carlos → guardar; tope; corregir campo;
-// compra sin factura (máximo y una por día); PDF por privado; Gemini sin cuota.
+// compra sin factura (máximo y una por día); PDF por privado; Gemini sin cuota; productos (lista, corrección
+// y pestaña Productos); factura ya registrada; reintento cuando falla Productos.
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 import {
   BROTHER,
@@ -9,8 +10,10 @@ import {
   clock,
   drive,
   EXPENSES_TOPIC,
+  failAppend,
   gemini,
   GROUP,
+  keyboardMessage,
   lastText,
   lastTo,
   message,
@@ -32,7 +35,7 @@ const invoice = (over: Record<string, unknown> = {}) => ({
   tax_id: "900.111.222-3",
   date: "2026-10-28",
   number: "FE123",
-  items: ["Cemento gris 50 kg"],
+  products: [{ name: "Cemento gris 50 kg", quantity: 1, unit: "und", total: 32000 }],
   total: 32000,
   chapter: "Materiales de obra y pintura",
   ...over,
@@ -75,6 +78,17 @@ Deno.test("factura con caja menor: vista previa, guardar, Drive y saldo", async 
   assertEquals(row.enlace_factura, `https://drive/${drive.indexOf(file) + 1}`);
   assertStringIncludes(lastText(), "Guardé $32.000 en Ferretería El Maestro (Caja menor). Caja menor: $68.000.");
   assertEquals((tables.sesiones ?? []).length, 0);
+  // Cada producto en Productos, con el número y el enlace de la factura.
+  const product = rowsOf("Productos").at(-1)!;
+  assertEquals(
+    [product.fecha, product.numero_factura, product.producto, product.cantidad, product.valor_unitario],
+    ["2026-10-28", "FE123", "Cemento gris 50 kg", 1, 32000],
+  );
+  assertEquals([product.valor_total, product.enlace_factura, product.registrado_el], [
+    32000,
+    row.enlace_factura,
+    "2026-10-28",
+  ]);
 });
 
 Deno.test("caja menor por encima del tope: queda como «Pagó Carlos» y se avisa a Carlos", async () => {
@@ -160,6 +174,13 @@ Deno.test("compra sin factura: hasta $10.000 y una por día", async () => {
   assertEquals([row.valor, row.numero_factura, row.medio_pago], [8000, "", "caja menor"]);
   assertStringIncludes(String(row.nota), "Sin factura. Clavos");
   assert(drive.some((f) => f.name === "2026-10-28 Ferretería de la esquina sin factura - 8.000.jpg"));
+  const product = rowsOf("Productos").at(-1)!;
+  assertEquals([product.producto, product.cantidad, product.valor_total, product.numero_factura], [
+    "Clavos",
+    1,
+    8000,
+    "",
+  ]);
 
   // Segunda en el mismo día: no.
   await processUpdate(inExpenses(BROTHER, { text: "/gasto" }));
@@ -199,4 +220,110 @@ Deno.test("Gemini sin cuota: avisa, reintenta y sigue; si vuelve a fallar, esper
   assertEquals(queued.intentos, 1);
   assert(String(queued.proximo_intento) > new Date().toISOString()); // dentro de unos minutos
   tables.cola_reintentos.length = 0;
+});
+
+Deno.test("productos: la lista sale en la vista previa, se corrige y cada uno va a Productos", async () => {
+  clearSent();
+  gemini.replies.push(invoice({
+    number: "FE500",
+    total: 76000,
+    products: [
+      { name: "Cemento gris 50 kg", quantity: 2, unit: "und", total: 64000 },
+      { name: "Brocha de 3 pulgadas", quantity: 1, unit: "und", total: null },
+    ],
+  }));
+  await processUpdate(inExpenses(BROTHER, photo("f6")));
+  assertStringIncludes(
+    lastText(),
+    "Productos (2):\n• 2 × Cemento gris 50 kg: $64.000\n• Brocha de 3 pulgadas: sin valor\nTotal: $76.000",
+  );
+  assertStringIncludes(lastText(), "⚠️ Falta el valor de 1 producto. Toca «Corregir campo».");
+
+  // «Corregir campo» → «Productos»: manda la lista para copiarla y corregirla.
+  await processUpdate(tapExpenses(BROTHER, "gas:c"));
+  assert(buttons().includes("Productos|gas:f:products"));
+  await processUpdate(tapExpenses(BROTHER, "gas:f:products"));
+  assertEquals(lastText(), "2 Cemento gris 50 kg 64.000\n1 Brocha de 3 pulgadas");
+  await processUpdate(inExpenses(BROTHER, { text: "2 Cemento gris 50 kg 64.000\nBrocha" }));
+  assertStringIncludes(lastText(), "No entendí estas líneas:\nBrocha\n");
+  await processUpdate(inExpenses(BROTHER, { text: "2 Cemento gris 50 kg 64.000\n1 Brocha de 3 pulgadas 10 mil" }));
+  assertStringIncludes(lastText(), "⚠️ Los productos suman $74.000 y el total es $76.000. Toca «Corregir campo».");
+
+  await processUpdate(tapExpenses(BROTHER, "gas:c"));
+  await processUpdate(tapExpenses(BROTHER, "gas:f:products"));
+  await processUpdate(
+    inExpenses(BROTHER, { text: "2 Cemento gris 50 kg 64.000\n1 Brocha de 3 pulgadas 10 mil\n2,5 m2 Malla 2.000" }),
+  );
+  assertStringIncludes(lastText(), "• Brocha de 3 pulgadas: $10.000\n• 2,5 m2 Malla: $2.000");
+  assert(!lastText().includes("⚠️"));
+
+  await processUpdate(tapExpenses(BROTHER, "gas:p:carlos"));
+  await processUpdate(tapExpenses(BROTHER, "gas:ok"));
+  assertEquals(lastExpense().items, "Cemento gris 50 kg, Brocha de 3 pulgadas, Malla");
+  const lines = rowsOf("Productos").slice(-3);
+  assertEquals(
+    lines.map((r) => [r.numero_factura, r.producto, r.cantidad, r.unidad, r.valor_unitario, r.valor_total]),
+    [
+      ["FE500", "Cemento gris 50 kg", 2, "und", 32000, 64000],
+      ["FE500", "Brocha de 3 pulgadas", 1, "und", 10000, 10000],
+      ["FE500", "Malla", 2.5, "m2", 800, 2000],
+    ],
+  );
+  assert(lines.every((r) => r.enlace_factura === lastExpense().enlace_factura));
+});
+
+Deno.test("factura ya registrada: avisa en la vista previa y, si la registran mientras tanto, al guardar", async () => {
+  clearSent();
+  // Una de las 4 facturas de la semilla, con el número leído con espacio.
+  gemini.replies.push(
+    invoice({ supplier: "Easy", tax_id: "900.155.107-1", number: "EL02 1045207", date: "2026-09-22", total: 1834030 }),
+  );
+  await processUpdate(inExpenses(BROTHER, photo("f7")));
+  assertStringIncludes(
+    lastText(),
+    "⚠️ Esta factura ya está registrada: Easy, mar 22 sep, $1.834.030 por Carlos. Si es la misma, toca «Cancelar».",
+  );
+  await processUpdate(tapExpenses(BROTHER, "gas:x"));
+
+  gemini.replies.push(invoice({ number: "FE600" }));
+  await processUpdate(inExpenses(BROTHER, photo("f8")));
+  assert(!lastText().includes("ya está registrada"));
+  await processUpdate(tapExpenses(BROTHER, "gas:p:carlos"));
+  const brotherPreview = keyboardMessage;
+  // Carlos registra la misma factura por privado (en PDF).
+  gemini.replies.push(invoice({ number: "FE600" }));
+  await processUpdate(message(CARLOS, pdf("f9")));
+  await processUpdate(tap(CARLOS, "gas:p:carlos"));
+  await processUpdate(tap(CARLOS, "gas:ok"));
+  const count = rowsOf("Gastos").length;
+
+  await processUpdate(tap(BROTHER, "gas:ok", GROUP, EXPENSES_TOPIC, brotherPreview));
+  assertStringIncludes(
+    lastText(),
+    "⚠️ Esta factura ya está registrada: Ferretería El Maestro, mié 28 oct, $32.000, registrada el mié 28 oct por Carlos.",
+  );
+  assertEquals(rowsOf("Gastos").length, count);
+  // Ya vio el aviso: si toca «Sí, guardar» otra vez, se guarda.
+  await processUpdate(tap(BROTHER, "gas:ok", GROUP, EXPENSES_TOPIC, brotherPreview));
+  assertEquals(rowsOf("Gastos").length, count + 1);
+});
+
+Deno.test("si falla Productos, «Sí, guardar» otra vez no repite el gasto ni la factura en Drive", async () => {
+  clearSent();
+  gemini.replies.push(invoice({ number: "FE700" }));
+  await processUpdate(inExpenses(BROTHER, photo("f10")));
+  await processUpdate(tapExpenses(BROTHER, "gas:p:carlos"));
+  const [expenses, products, files] = [rowsOf("Gastos").length, rowsOf("Productos").length, drive.length];
+  failAppend.add("Productos");
+  await processUpdate(tapExpenses(BROTHER, "gas:ok"));
+  assertEquals([rowsOf("Gastos").length, rowsOf("Productos").length], [expenses + 1, products]);
+  assertStringIncludes(lastTo(GROUP, EXPENSES_TOPIC), "No pude procesar eso.");
+
+  await processUpdate(tapExpenses(BROTHER, "gas:ok"));
+  assertEquals([rowsOf("Gastos").length, rowsOf("Productos").length, drive.length], [
+    expenses + 1,
+    products + 1,
+    files + 1,
+  ]);
+  assertStringIncludes(lastTo(GROUP, EXPENSES_TOPIC), "Guardé $32.000 en Ferretería El Maestro (Pagó Carlos).");
 });

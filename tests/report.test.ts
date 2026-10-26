@@ -233,7 +233,7 @@ Deno.test("«Ninguna» y «Agregar compra» desde la vista previa (la factura pu
     tax_id: null,
     date: "2026-10-14", // la factura es de otro día: cuenta el día en que se registra
     number: "77",
-    items: ["Brocha"],
+    products: [{ name: "Brocha", quantity: 1, unit: "und", total: 12000 }],
     total: 12000,
     chapter: "Materiales de obra y pintura",
   });

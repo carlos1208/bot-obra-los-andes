@@ -66,6 +66,7 @@ const TABS = [
   "Reportes",
   "Notas",
   "Gastos",
+  "Productos",
   "Pagos",
   "Presupuesto",
 ];
@@ -76,6 +77,8 @@ await resetSheet();
 
 /** Consultas de append a Sheets (para revisar sus opciones). */
 export const appends: string[] = [];
+/** Pestañas cuyo próximo append falla con un 500 (una vez cada una). */
+export const failAppend = new Set<string>();
 
 /** Respuestas de Gemini en orden: un objeto (JSON de la respuesta) o { status } para un error HTTP. */
 export const gemini = {
@@ -163,9 +166,9 @@ function sheets(url: URL, init: RequestInit): Response {
   }
   const append = path.match(/\/values\/'([^']+)'!A1:append$/);
   if (append) {
+    if (failAppend.delete(append[1])) return Response.json({ error: { message: "falla de prueba" } }, { status: 500 });
     appends.push(url.search);
-    const row = JSON.parse(String(init.body)).values[0].map(entered);
-    sheet[append[1]].push(row);
+    for (const row of JSON.parse(String(init.body)).values) sheet[append[1]].push(row.map(entered));
     return Response.json({});
   }
   const header = path.match(/\/values\/'([^']+)'!1:1$/);

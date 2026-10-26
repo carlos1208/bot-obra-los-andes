@@ -5,7 +5,7 @@
 // Uso:
 //   deno task crear-hoja                          crea y llena las pestañas que falten
 //   deno task crear-hoja --reemplazar Tareas,Objetivos
-//   deno task crear-hoja --reemplazar todas       (borra Reportes, Gastos y Pagos: cuidado)
+//   deno task crear-hoja --reemplazar todas       (borra Reportes, Gastos, Productos y Pagos: cuidado)
 import { parse } from "jsr:@std/csv@1.0.6";
 import { loadEnv, required } from "./_env.ts";
 import { columnLetter, sheetsFetch, toCell } from "../supabase/functions/_shared/sheets.ts";
@@ -21,6 +21,7 @@ const TABS = [
   "Reportes",
   "Notas",
   "Gastos",
+  "Productos",
   "Pagos",
   "Presupuesto",
   "Config",
@@ -33,6 +34,8 @@ const MONEY_COLUMNS = new Set([
   "gastado",
   "saldo",
   "saldo_caja_menor",
+  "valor_unitario",
+  "valor_total",
 ]);
 const DATE_COLUMNS = new Set([
   "fecha",

@@ -1,7 +1,8 @@
 // Fase 2: valida que Gemini lea bien las facturas y las notas de voz.
 // Pasa las 4 facturas reales en PDF y, si la das, la foto de una factura impresa, y compara con
-// semillas/facturas_esperadas.csv. Si el modelo principal falla en alguna de las 4, repite con el
-// de respaldo y dice cuál quedó. Al final transcribe y resume una nota de voz OGG de Telegram.
+// semillas/facturas_esperadas.csv. También lista los productos de cada factura y revisa que sumen el
+// total. Si el modelo principal falla en alguna de las 4, repite con el de respaldo y dice cuál quedó.
+// Al final transcribe y resume una nota de voz OGG de Telegram.
 //
 // Uso:
 //   deno task validar-ia --facturas "C:\...\05 Facturas y pagos\Facturas" --foto "C:\...\factura.jpg" --voz "C:\...\nota.ogg"
@@ -11,6 +12,7 @@ import { readTabs } from "../supabase/functions/_shared/sheets.ts";
 import { formatPesos } from "../supabase/functions/_shared/format.ts";
 import { fallbackModel, GeminiError, type InlineFile, primaryModel } from "../supabase/functions/_shared/gemini.ts";
 import { extractInvoice, type Invoice, summarizeNote } from "../supabase/functions/_shared/extractors.ts";
+import { linesTotal, lineText } from "../supabase/functions/_shared/products.ts";
 import { checkInvoice, type ExpectedInvoice, matchExpected, parseExpected } from "./_invoice_check.ts";
 
 await loadEnv();
@@ -159,7 +161,14 @@ async function showInvoice(label: string, file: InlineFile, model: string, expec
     );
   }
   console.log(`  proveedor: ${got.supplier} · NIT: ${got.tax_id ?? "—"} · capítulo sugerido: ${got.chapter}`);
-  console.log(`  ítems: ${got.items.join(", ") || "—"}`);
+  const sum = linesTotal(got.products);
+  const adds = got.total !== null && got.products.every((l) => l.total !== null) && sum === got.total;
+  console.log(
+    `  ${adds ? "✓" : "✗"} productos: ${got.products.length}, suman ${formatPesos(sum)}${
+      adds ? " (igual al total)" : "  (no cuadran con el total: revísalos)"
+    }`,
+  );
+  for (const l of got.products) console.log(`      ${lineText(l)}`);
   console.log(`  (${seconds(start)} s)`);
   return ok;
 }

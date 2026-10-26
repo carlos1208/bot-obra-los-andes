@@ -15,14 +15,14 @@ Postgres (solo estado técnico)      Google Sheet (datos) + Google Drive (fotos)
 
 ## Estado por fases
 
-| Fase                   | Qué incluye                                                                                                     | Estado        |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------- | ------------- |
-| 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista         |
-| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista         |
-| 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | Lista         |
-| 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre», pares en el reporte                    | **En prueba** |
-| 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Pendiente     |
-| 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Pendiente     |
+| Fase                   | Qué incluye                                                                                                     | Estado    |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------- | --------- |
+| 1. Base                | Hoja desde `semillas/`, OAuth de Drive, webhook, `/estado` y recepción de fotos ANTES de Carlos con el catálogo | Lista     |
+| 2. Validación de la IA | Facturas reales y nota de voz contra Gemini                                                                     | Lista     |
+| 3. MVP                 | Enrutador, reporte diario por notas con tareas terminadas y avance, gastos con caja menor y reintentos          | Lista     |
+| 4. Antes y después     | DESPUÉS, validación, `/pendientes`, ANTES por imprevisto, «Otro nombre», pares en el reporte                    | Lista     |
+| 5. Pagos y consultas   | Pagos, hitos, reposición de caja menor, preguntas libres                                                        | Pendiente |
+| 6. Programados         | Avisos del lunes, diarios y cierre del sábado                                                                   | Pendiente |
 
 ## Estructura
 
@@ -165,6 +165,7 @@ deno task validar-ia --facturas "C:\Users\Carlos\Documents\Documentos personales
 - Lee los capítulos de `Presupuesto` en la hoja y pasa a Gemini las 4 facturas PDF y las fotos (`--foto` se puede
   repetir).
 - Compara número, fecha y total con `semillas/facturas_esperadas.csv`. El número se compara sin espacios ni guiones.
+- Lista los productos de cada factura (cantidad, nombre y valor de la línea) y dice si suman el total.
 - Si el modelo principal falla en alguna de las 4, repite con el de respaldo y dice cuál quedó.
 - Transcribe y resume la nota de voz (`audio/ogg`) con el modelo que quedó.
 - **Criterio:** número, fecha y total exactos en las 4 facturas PDF. Las fotos que no están en el CSV y la nota de voz
@@ -223,13 +224,30 @@ Antes: `git pull`, `deno task test`, `npx supabase functions deploy telegram --u
 - **Reporte:** el día que se sube un DESPUÉS, la sección «Fotos» lo nombra («F01 Muro cocina–sala completo: antes y
   después (tareas 02, 09; H1, H2), por validar»). Si marcas terminada una tarea cuyo ANTES no tiene DESPUÉS, avisa.
 
+### Prueba de productos y facturas repetidas
+
+Antes: `git pull`, `deno task test`, `deno task crear-hoja` (crea la pestaña `Productos` con los 38 productos de las 4
+facturas reales; no toca las demás) y `npx supabase functions deploy telegram --use-api`.
+
+Opcional: `deno task validar-ia --facturas "…"` lista los productos que lee Gemini de las 4 facturas y dice si suman el
+total.
+
+- **Productos:** foto de una factura con varios productos en el tema Gastos. La vista previa los lista uno por línea con
+  su valor y avisa si falta un valor o si no suman el total. «Corregir campo» → «Productos»: el bot manda la lista;
+  cópiala, corrige y mándala completa (una línea por producto: `2 Cemento gris de 50 kg 64.000`). Al guardar, cada
+  producto queda en `Productos` con el número de la factura y el enlace a Drive.
+- **Factura repetida:** vuelve a mandar la misma factura. La vista previa avisa «⚠️ Esta factura ya está registrada…»
+  con la fecha y quién la registró; «Cancelar» no guarda nada. Si alguien la registra mientras tienes la vista previa
+  abierta, el aviso sale al tocar «Sí, guardar» y se guarda solo si vuelves a tocarlo.
+- **Compra sin factura:** queda una fila en `Productos` con lo que se compró, sin número de factura.
+
 ## Uso diario
 
 - **Cambiar el modelo de Gemini:** `npx supabase secrets set GEMINI_MODEL=<modelo>` (o `GEMINI_MODEL_FALLBACK`). No hay
   que volver a desplegar.
 - **Volver a cargar las semillas:** `deno task crear-hoja --reemplazar Tareas,Objetivos`. Sin `--reemplazar` no toca los
   datos de las pestañas que ya los tienen; si la semilla trae columnas nuevas, las agrega al final del encabezado.
-  `--reemplazar todas` borra también Reportes, Gastos y Pagos.
+  `--reemplazar todas` borra también Reportes, Gastos, Productos y Pagos.
 - **Cambiar el catálogo de fotos ANTES:** edita `semillas/fotos_antes.json`, corre `deno task catalogo` y vuelve a
   desplegar `telegram`. Una prueba falla si las dos copias no son iguales.
 - **Pruebas:** `deno task test`. Revisión de tipos: `deno task check`.
@@ -261,6 +279,9 @@ Si cambias una semilla allá, cópiala aquí y vuelve a cargarla con `deno task 
 - `Tareas.csv`: las 46 tareas del cronograma v5 (00–42 y Z1–Z3 tentativas).
 - `fotos_antes.json`: catálogo F01–F24 con encuadre, tareas e hitos.
 - `Gastos.csv` y `Pagos.csv`: lo pagado antes de la obra, con `cuenta_12M = no`.
+- `Productos.csv`: un producto por línea de cada factura, con `numero_factura` y `enlace_factura` para cruzarlo con
+  `Gastos`. Trae los 38 productos de las 4 facturas reales (leídos de los PDF; cada factura suma su total).
+  `valor_total` es lo pagado por la línea (con IVA y descuento) y `valor_unitario` es `valor_total / cantidad`.
 - `facturas_esperadas.csv`: los valores de las 4 facturas reales para la fase 2.
 - `Reportes.csv`: solo encabezados. Una fila por día: resumen, tareas terminadas (`02-05`), avance de la obra contra el
   cronograma (`avance_obra_pct`, `avance_esperado_pct`, `desvio_pct`, ponderados por los días de cada tarea), lo que

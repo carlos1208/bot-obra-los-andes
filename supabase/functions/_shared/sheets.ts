@@ -95,16 +95,22 @@ function columnIndex(tab: string, headers: string[], column: string): number {
 }
 
 /** Agrega una fila al final de la pestaña (append + USER_ENTERED), en el orden de sus encabezados. */
-export async function appendRow(tab: string, values: Record<string, unknown>): Promise<void> {
+export function appendRow(tab: string, values: Record<string, unknown>): Promise<void> {
+  return appendRows(tab, [values]);
+}
+
+/** Agrega varias filas en una sola llamada. */
+export async function appendRows(tab: string, rows: Record<string, unknown>[]): Promise<void> {
+  if (!rows.length) return;
   const headers = await readHeaders(tab);
-  for (const column of Object.keys(values)) columnIndex(tab, headers, column);
-  const row = headers.map((h) => toCell(h, values[h]));
+  for (const column of new Set(rows.flatMap(Object.keys))) columnIndex(tab, headers, column);
+  const values = rows.map((r) => headers.map((h) => toCell(h, r[h])));
   // Sin INSERT_ROWS: insertar filas copia el formato de la fila de arriba (en una pestaña vacía, el del
   // encabezado). Así la fila nueva usa el formato de la columna (fechas, pesos).
   const q = new URLSearchParams({ valueInputOption: "USER_ENTERED" });
   await sheetsFetch(`/values/${encodeURIComponent(`'${tab}'!A1`)}:append?${q}`, {
     method: "POST",
-    body: JSON.stringify({ values: [row] }),
+    body: JSON.stringify({ values }),
   });
 }
 

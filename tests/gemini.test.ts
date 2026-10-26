@@ -89,7 +89,11 @@ Deno.test("la factura usa los capítulos de Presupuesto y el modelo pedido", asy
     tax_id: "800.242.106-2",
     date: "2026-10-19",
     number: "5209100261757",
-    items: ["Tubo rectangular 90 x 50"],
+    products: [
+      { name: "Corte de vigas de hierro", quantity: 1, unit: "und", total: 12900 },
+      { name: "Tubo rectangular 90 x 50", quantity: 1, unit: "und", total: 167900 },
+      { name: "Pino de 2 x 3 pulgadas de 3,2 m", quantity: 1, unit: "und", total: 34900 },
+    ],
     total: 215700,
     chapter: "Materiales de obra y pintura",
   };
@@ -99,6 +103,7 @@ Deno.test("la factura usa los capítulos de Presupuesto y el modelo pedido", asy
   const schema = calls[0].body.generationConfig.responseFormat.text.schema;
   assertEquals(schema.properties.chapter.enum, ["Drywall", "Materiales de obra y pintura"]);
   assertEquals(schema.properties.total.type, ["integer", "null"]);
+  assertEquals(schema.properties.products.items.required, ["name", "quantity", "unit", "total"]);
   assert(calls[0].url.includes("/models/modelo-respaldo:"));
 });
 
@@ -122,7 +127,7 @@ Deno.test("compara número, fecha y total con facturas_esperadas.csv", async () 
     tax_id: null,
     date: "2026-09-22",
     number: "el02 1045207",
-    items: [],
+    products: [],
     total: 1834030,
     chapter: "",
   };
