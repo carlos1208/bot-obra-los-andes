@@ -26,7 +26,7 @@ Los Andes/
 │   ├── 03 Sala-comedor - panorámica hacia ventana y cocina (2026-09-28).jpg
 │   ├── 04 Sala-comedor - muro con nicho y paso a la cocina (2026-10-01).jpg
 │   ├── 05 Sala-comedor - paso a la cocina, puerta principal y pasillo (2026-10-01).jpg
-│   └── Antes - estado original (F01-F24)/        vacía
+│   └── Antes - estado original (F01-F24)/        vacía (el catálogo quedó en 13 fotos el 27 oct)
 ├── 02 Planos/
 │   ├── Plano aproximado v5 - vigente (2026-10-22).pdf / .png
 │   ├── Bocetos y referencias/        boceto a mano: planta general; cocina y área de labores
@@ -34,12 +34,14 @@ Los Andes/
 ├── 03 Cronograma/
 │   ├── Cronograma v5 - vigente (2026-10-22).pdf / .png
 │   └── Versiones anteriores/         cronogramas v1–v4
-├── 04 Documentos/
-│   ├── Plan de acción - Remodelación apto Los Andes (2026-10-22).pdf
-│   ├── Manual del maestro de obra (2026-10-22).pdf
-│   ├── App de reportes de obra - diseño y elección de IA (2026-10-22).pdf
+├── 04 Documentos/                    los vigentes son Google Docs del 27 oct
+│   ├── Plan de acción - Remodelación apto Los Andes (2026-10-27)
+│   ├── Manual del maestro de obra (2026-10-27)
+│   ├── App de reportes de obra - cómo quedó el bot (2026-10-27)
+│   ├── Guía del bot de obra (2026-10-27)          uso del bot y rutina diaria del hermano
 │   ├── Triple A - tickets de reclamo (2026-10-19).txt
-│   └── Triple A - nota de tickets en la pared (2026-10-19).jpg
+│   ├── Triple A - nota de tickets en la pared (2026-10-19).jpg
+│   └── Versiones anteriores/         los PDF del 22 oct (plan, manual y diseño de la app)
 ├── 05 Facturas y pagos/
 │   ├── Facturas/                     las 4 facturas reales (fase 2)
 │   │   ├── 2026-09-22 Easy EL021045207 - baños, grifería, lavaplatos y estufa - 1.834.030.pdf
@@ -48,9 +50,12 @@ Los Andes/
 │   │   └── 2026-10-20 Homecenter 5212100268554 - transporte - 19.900.pdf
 │   └── Pagos/                        vacía
 ├── 06 Cotizaciones/                  vacía
-└── 07 App de reportes/
-    ├── PROMPT - bot de obra para Claude Code.md
-    └── semillas/                     origen de semillas/ de este repo
+├── 07 App de reportes/
+│   ├── PROMPT - bot de obra para Claude Code.md   diseño inicial (los cambios están en «App de reportes … cómo quedó»)
+│   ├── Obra Los Andes – datos        la hoja del bot
+│   ├── Test app/
+│   └── semillas/                     copia de semillas/ de este repo (versiones viejas en «Versiones anteriores»)
+└── LÉEME - cambios del 27 oct 2026   qué cambió ese día, para leerlo y descargarlo
 ```
 
 Ids útiles:
@@ -61,8 +66,9 @@ Ids útiles:
 | `07 App de reportes/semillas`  | `1MFYT7bvOFM3U4F1xrz2aMIRd1MxO2YnR` |
 | `03 Cronograma`                | `1c4ZjGseVXFuacvJlhKK4SymTvDBwo9uH` |
 | `01 Fotos y video`             | `1G2ZpcBYFgtX1eBjcCnQtSb57AebYNtTs` |
+| `04 Documentos`                | `1Zqkqt1rxytmbDZF9Zr4FlA03sfrsS9dT` |
 
-Las fotos de referencia «foto 04», «foto 06» del catálogo F01–F24 se refieren a `01 Fotos y video/` (hoy solo hay
-00–05).
+Las fotos de referencia «foto 04», «foto 06» del catálogo (`semillas/fotos_antes.json`, 13 de las F01–F24) se refieren a
+`01 Fotos y video/` (hoy solo hay 00–05).
 
 El bot no escribe en esta carpeta: crea la suya, `Obra Los Andes/`, con permiso `drive.file`.
