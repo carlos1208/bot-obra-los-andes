@@ -70,11 +70,14 @@ export async function updatePair(pair: Pair, props: Record<string, string>): Pro
   await Promise.all([...pair.before, ...pair.after].map((f) => updateAppProperties(f.id, values)));
 }
 
+/** El catálogo original llegó a F24 (hoy quedan 13): los códigos nuevos siguen desde F25 para no repetir uno viejo. */
+const LAST_ORIGINAL_CODE = 24;
+
 /** Código para una foto fuera del catálogo: el siguiente F después del mayor que exista (F25, F26…). */
 export function nextCode(pairs: Pair[]): string {
   const numbers = [...CATALOG.map((c) => c.codigo), ...pairs.map((p) => p.code)]
     .map((c) => Number(c.match(/^F(\d+)$/)?.[1] ?? 0));
-  return `F${String(Math.max(0, ...numbers) + 1).padStart(2, "0")}`;
+  return `F${String(Math.max(LAST_ORIGINAL_CODE, ...numbers) + 1).padStart(2, "0")}`;
 }
 
 /** Bytes de las fotos para mandarlas a Telegram. */

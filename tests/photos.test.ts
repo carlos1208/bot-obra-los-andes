@@ -9,11 +9,10 @@ Deno.test("el catálogo del bot es idéntico al de semillas/", async () => {
   assertEquals(bot, seed, "Corre deno task catalogo");
 });
 
-Deno.test("catálogo F01–F24 con códigos únicos y botones que caben", () => {
-  assertEquals(CATALOG.length, 24);
+Deno.test("catálogo de 13 fotos con códigos únicos y botones que caben", () => {
   assertEquals(
     CATALOG.map((f) => f.codigo),
-    Array.from({ length: 24 }, (_, i) => `F${String(i + 1).padStart(2, "0")}`),
+    ["F01", "F02", "F03", "F04", "F06", "F09", "F10", "F11", "F15", "F16", "F19", "F21", "F23"],
   );
   for (const f of CATALOG) assert(new TextEncoder().encode(`ant:c:${f.codigo}`).length <= 64);
 });

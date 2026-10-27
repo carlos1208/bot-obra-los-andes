@@ -195,7 +195,7 @@ export interface Dashboard {
   moneyView?: MoneyView;
   purchases: Purchases;
   pairs: PairView[];
-  /** Fotos del catálogo F01–F24 que todavía no tienen ANTES. */
+  /** Fotos del catálogo que todavía no tienen ANTES. */
   missingBefore: { code: string; name: string }[];
   pairsError?: string;
   reports: ReportView[];

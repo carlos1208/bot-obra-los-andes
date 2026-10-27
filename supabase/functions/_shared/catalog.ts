@@ -1,4 +1,4 @@
-// Catálogo de fotos ANTES (F01–F24). Copia de semillas/fotos_antes.json: una prueba
+// Catálogo de fotos ANTES (13 de las F01–F24 originales). Copia de semillas/fotos_antes.json: una prueba
 // verifica que sean idénticos.
 
 import data from "./fotos_antes.json" with { type: "json" };

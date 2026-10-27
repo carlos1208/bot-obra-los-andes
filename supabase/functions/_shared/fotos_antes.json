@@ -46,18 +46,6 @@
     ]
   },
   {
-    "codigo": "F05",
-    "nombre": "Ventana de la cocina con la rejilla",
-    "encuadre": "Desde adentro (y desde afuera si se puede)",
-    "tareas": [
-      "05",
-      "18"
-    ],
-    "hitos": [
-      "H1"
-    ]
-  },
-  {
     "codigo": "F06",
     "nombre": "Entrada al área de labores",
     "encuadre": "Los dos muretes enfrentados, hasta el techo",
@@ -67,29 +55,6 @@
     ],
     "hitos": [
       "H1",
-      "H2"
-    ]
-  },
-  {
-    "codigo": "F07",
-    "nombre": "Puntos de agua, desagüe y gas de cocina y labores",
-    "encuadre": "De cerca, con cinta métrica",
-    "tareas": [
-      "08"
-    ],
-    "hitos": [
-      "H2"
-    ]
-  },
-  {
-    "codigo": "F08",
-    "nombre": "Muros enchapados de la cocina y muro para cuadros",
-    "encuadre": "Como la foto 06",
-    "tareas": [
-      "09",
-      "10"
-    ],
-    "hitos": [
       "H2"
     ]
   },
@@ -126,40 +91,6 @@
     ]
   },
   {
-    "codigo": "F12",
-    "nombre": "Ducha del baño social",
-    "encuadre": "De frente: muros y piso",
-    "tareas": [
-      "24",
-      "25",
-      "29"
-    ],
-    "hitos": [
-      "H3"
-    ]
-  },
-  {
-    "codigo": "F13",
-    "nombre": "Lavamanos y sanitario del baño social",
-    "encuadre": "De cerca, con sus llaves",
-    "tareas": [
-      "23",
-      "27"
-    ],
-    "hitos": [
-      "H3"
-    ]
-  },
-  {
-    "codigo": "F14",
-    "nombre": "Techo del baño social",
-    "encuadre": "Hacia arriba",
-    "tareas": [
-      "28"
-    ],
-    "hitos": []
-  },
-  {
     "codigo": "F15",
     "nombre": "Baño principal completo",
     "encuadre": "Desde la puerta",
@@ -186,43 +117,11 @@
     ]
   },
   {
-    "codigo": "F17",
-    "nombre": "Lavamanos y sanitario del baño principal",
-    "encuadre": "De cerca, con sus llaves",
-    "tareas": [
-      "31",
-      "35",
-      "38"
-    ],
-    "hitos": [
-      "H4"
-    ]
-  },
-  {
-    "codigo": "F18",
-    "nombre": "Techo de cemento del baño principal",
-    "encuadre": "Con la ventanita a la caja de aire",
-    "tareas": [
-      "40"
-    ],
-    "hitos": []
-  },
-  {
     "codigo": "F19",
     "nombre": "Sitio del contador robado y la reja",
     "encuadre": "Que se vea dónde iría el nuevo",
     "tareas": [
       "00"
-    ],
-    "hitos": []
-  },
-  {
-    "codigo": "F20",
-    "nombre": "Zona de la barra",
-    "encuadre": "El piso donde va el muro bajo, desde la sala",
-    "tareas": [
-      "09",
-      "39"
     ],
     "hitos": []
   },
@@ -237,15 +136,6 @@
     "hitos": []
   },
   {
-    "codigo": "F22",
-    "nombre": "Muros de la sala-comedor",
-    "encuadre": "Uno por foto",
-    "tareas": [
-      "40"
-    ],
-    "hitos": []
-  },
-  {
     "codigo": "F23",
     "nombre": "Pisos de granito y puertas",
     "encuadre": "Panorámica por espacio y, de cerca, manchas, despiques y juntas dañadas",
@@ -256,15 +146,5 @@
     "hitos": [
       "H5"
     ]
-  },
-  {
-    "codigo": "F24",
-    "nombre": "Tablero eléctrico",
-    "encuadre": "Con la tapa abierta",
-    "tareas": [
-      "04",
-      "08"
-    ],
-    "hitos": []
   }
 ]

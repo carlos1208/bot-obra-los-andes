@@ -1,6 +1,6 @@
 // Fotos ANTES. Solo Drive: no escribe en la hoja. Cada par vive en «Antes y después/<código> <nombre>/»
 // y su estado en appProperties.
-// - Carlos: catálogo F01–F24 (las que faltan) o «Otro nombre»: Gemini propone las tareas y Carlos confirma.
+// - Carlos: catálogo de fotos ANTES (las que faltan) o «Otro nombre»: Gemini propone las tareas y Carlos confirma.
 // - Hermano (excepción): falta un ANTES o hay un imprevisto. Nombre corto, motivo y fotos; Carlos aprueba o
 //   rechaza por privado. Al aprobar, Gemini propone las tareas y Carlos confirma.
 

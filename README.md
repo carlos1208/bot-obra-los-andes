@@ -478,7 +478,9 @@ Después de cambiar cualquier valor en `.env.local`: `deno task secretos`.
 Si cambias una semilla allá, cópiala aquí y vuelve a cargarla con `deno task crear-hoja --reemplazar <Pestaña>`.
 
 - `Tareas.csv`: las 46 tareas del cronograma v5 (00–42 y Z1–Z3 tentativas).
-- `fotos_antes.json`: catálogo F01–F24 con encuadre, tareas e hitos.
+- `fotos_antes.json`: catálogo de fotos ANTES con encuadre, tareas e hitos. Desde el 27 oct quedan 13 de las F01–F24
+  originales (F01, F02, F03, F04, F06, F09, F10, F11, F15, F16, F19, F21 y F23); una foto con «Otro nombre» sigue desde
+  F25 para no repetir un código viejo.
 - `Gastos.csv` y `Pagos.csv`: lo pagado antes de la obra, con `cuenta_12M = no`.
 - `Productos.csv`: un producto por línea de cada factura, con `numero_factura` y `enlace_factura` para cruzarlo con
   `Gastos`. `producto` es el nombre legible y `descripcion_factura` la descripción tal como viene en la factura. Trae

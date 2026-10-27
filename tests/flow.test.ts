@@ -66,7 +66,7 @@ Deno.test("fotos ANTES: catálogo, una por una y «Listo»", async () => {
   clearSent();
   await processUpdate(message(CARLOS, { text: "/antes" }, GROUP, PHOTOS_TOPIC));
   const catalog = sent.find((e) => e.method === "sendMessage")!;
-  assertStringIncludes(String(catalog.params.text), "Faltan 24 de 24.");
+  assertStringIncludes(String(catalog.params.text), "Faltan 13 de 13.");
   const keyboard = (catalog.params.reply_markup as { inline_keyboard: { callback_data: string }[][] }).inline_keyboard;
   assertEquals(keyboard[0][0].callback_data, "ant:c:F01");
   assertEquals(keyboard.at(-2)![0].callback_data, "ant:p:1"); // página siguiente
@@ -97,7 +97,7 @@ Deno.test("fotos ANTES: catálogo, una por una y «Listo»", async () => {
   // F01 ya no aparece en el catálogo.
   clearSent();
   await processUpdate(message(CARLOS, { text: "/antes" }));
-  assertStringIncludes(lastText(), "Faltan 23 de 24.");
+  assertStringIncludes(lastText(), "Faltan 12 de 13.");
 });
 
 Deno.test("fotos ANTES: álbum que llega antes de elegir el código", async () => {

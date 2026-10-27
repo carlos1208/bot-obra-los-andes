@@ -215,8 +215,8 @@ Deno.test("fotos: enlace firmado por quien mira, solo fotos y con vencimiento", 
   assertEquals(urls.length, 2);
   assert(urls[0].startsWith("https://proyecto.supabase.co/functions/v1/tablero?foto=antes1&"));
   assertFalse(html.includes(BROTHER_CODE));
-  // 23 fotos del catálogo siguen sin ANTES.
-  assertStringIncludes(html, "23 fotos del catálogo sin ANTES");
+  // 12 fotos del catálogo siguen sin ANTES.
+  assertStringIncludes(html, "12 fotos del catálogo sin ANTES");
 
   const get = (url: string) => handler(new Request(url.replace("/functions/v1", "")));
   const ok = await get(urls[0]);
